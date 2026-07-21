@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme using platform native Material styling -->
+    <style name="Theme.DevPulseAI" parent="android:Theme.Material.NoActionBar">
+        <!-- Configure initial background matching Dark Theme -->
+        <item name="android:windowBackground">#0C0D12</item>
+        <item name="android:statusBarColor">#0C0D12</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
