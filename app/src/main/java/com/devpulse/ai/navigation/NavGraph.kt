@@ -10,9 +10,13 @@ import androidx.navigation.navArgument
 import com.devpulse.ai.screens.DashboardScreen
 import com.devpulse.ai.screens.LoginScreen
 import com.devpulse.ai.viewmodel.LoginViewModel
+import com.devpulse.ai.viewmodel.ProfileViewModel
 
 @Composable
 fun NavGraph(navController: NavHostController) {
+    // Shared ViewModel at the NavGraph level so state is preserved during transition
+    val profileViewModel: ProfileViewModel = viewModel()
+
     NavHost(
         navController = navController,
         startDestination = Screen.Login.route
@@ -21,6 +25,7 @@ fun NavGraph(navController: NavHostController) {
             val loginViewModel: LoginViewModel = viewModel()
             LoginScreen(
                 viewModel = loginViewModel,
+                profileViewModel = profileViewModel,
                 onNavigateToDashboard = { username ->
                     navController.navigate(Screen.Dashboard.createRoute(username))
                 }
@@ -35,7 +40,13 @@ fun NavGraph(navController: NavHostController) {
             )
         ) { backStackEntry ->
             val username = backStackEntry.arguments?.getString("username") ?: ""
-            DashboardScreen(username = username)
+            DashboardScreen(
+                username = username,
+                viewModel = profileViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

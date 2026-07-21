@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,19 +40,35 @@ import com.devpulse.ai.components.BrandBackground
 import com.devpulse.ai.components.BrandButton
 import com.devpulse.ai.components.GlowCard
 import com.devpulse.ai.components.PulseTextField
+import com.devpulse.ai.ui.theme.Primary
+import com.devpulse.ai.ui.theme.SurfaceDark
+import com.devpulse.ai.ui.theme.TextSecondaryDark
+import com.devpulse.ai.viewmodel.ErrorType
 import com.devpulse.ai.viewmodel.LoginViewModel
+import com.devpulse.ai.viewmodel.ProfileUiState
+import com.devpulse.ai.viewmodel.ProfileViewModel
 
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
+    profileViewModel: ProfileViewModel,
     onNavigateToDashboard: (String) -> Unit
 ) {
     val username by viewModel.username.collectAsState()
     val isButtonEnabled by viewModel.isButtonEnabled.collectAsState()
+    val profileUiState by profileViewModel.uiState.collectAsState()
 
     var startAnimation by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         startAnimation = true
+    }
+
+    // Trigger navigation only AFTER successfully fetching the profile details
+    LaunchedEffect(profileUiState) {
+        if (profileUiState is ProfileUiState.Success) {
+            onNavigateToDashboard(username)
+            profileViewModel.resetState() // Reset flow state to Idle
+        }
     }
 
     BrandBackground {
@@ -153,14 +172,68 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
+                        val isLoading = profileUiState is ProfileUiState.Loading
                         BrandButton(
-                            text = "Analyze Profile",
-                            onClick = { onNavigateToDashboard(username) },
-                            enabled = isButtonEnabled
+                            text = if (isLoading) "Analyzing..." else "Analyze Profile",
+                            onClick = {
+                                profileViewModel.fetchAndAnalyzeProfile(username)
+                            },
+                            enabled = isButtonEnabled && !isLoading
                         )
                     }
                 }
             }
         }
+
+        // Show Material 3 Error Dialog directly on the Login screen if fetch fails
+        if (profileUiState is ProfileUiState.Error) {
+            val errState = profileUiState as ProfileUiState.Error
+            LoginErrorDialog(
+                title = when (errState.errorType) {
+                    ErrorType.USER_NOT_FOUND -> "User Not Found"
+                    ErrorType.RATE_LIMIT -> "API Rate Limit"
+                    ErrorType.NETWORK -> "No Internet"
+                    ErrorType.EMPTY_REPOS -> "Empty Repositories"
+                    else -> "Analysis Error"
+                },
+                message = errState.message,
+                onDismiss = {
+                    profileViewModel.clearError()
+                }
+            )
+        }
     }
+}
+
+@Composable
+fun LoginErrorDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                color = TextSecondaryDark,
+                fontSize = 14.sp
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("OK", color = Primary, fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = SurfaceDark,
+        shape = RoundedCornerShape(16.dp)
+    )
 }
