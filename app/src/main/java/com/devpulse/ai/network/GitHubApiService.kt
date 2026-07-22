@@ -37,8 +37,25 @@ interface GitHubApiService {
         private const val BASE_URL = "https://api.github.com/"
 
         fun create(): GitHubApiService {
+            val client = okhttp3.OkHttpClient.Builder()
+                .addInterceptor { chain ->
+                    val original = chain.request()
+                    val requestBuilder = original.newBuilder()
+                        .header("Accept", "application/vnd.github+json")
+                        .header("User-Agent", "DevPulse-AI")
+
+                    val token = com.devpulse.ai.BuildConfig.GITHUB_TOKEN
+                    if (token.isNotBlank()) {
+                        requestBuilder.header("Authorization", "Bearer $token")
+                    }
+
+                    chain.proceed(requestBuilder.build())
+                }
+                .build()
+
             return Retrofit.Builder()
                 .baseUrl(BASE_URL)
+                .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
                 .create(GitHubApiService::class.java)

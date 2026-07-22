@@ -212,6 +212,7 @@ fun DashboardScreen(
                         ErrorType.RATE_LIMIT -> "API Rate Limit"
                         ErrorType.NETWORK -> "No Internet"
                         ErrorType.EMPTY_REPOS -> "Empty Repositories"
+                        ErrorType.TOKEN_MISSING -> "Token Missing"
                         else -> "Analysis Error"
                     },
                     message = state.message,

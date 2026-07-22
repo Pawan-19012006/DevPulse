@@ -23,6 +23,7 @@ enum class ErrorType {
     RATE_LIMIT,
     NETWORK,
     EMPTY_REPOS,
+    TOKEN_MISSING,
     UNKNOWN
 }
 
@@ -58,6 +59,8 @@ class ProfileViewModel(
                 val analyzed = AnalysisEngine.analyze(dataPackage)
                 _analyzedProfile.value = analyzed
                 _uiState.value = ProfileUiState.Success(analyzed)
+            } catch (e: GitHubTokenMissingException) {
+                _uiState.value = ProfileUiState.Error(e.message ?: "GitHub token not configured.", ErrorType.TOKEN_MISSING)
             } catch (e: UserNotFoundException) {
                 _uiState.value = ProfileUiState.Error(e.message ?: "User not found", ErrorType.USER_NOT_FOUND)
             } catch (e: RateLimitException) {

@@ -1,23 +1,78 @@
+# ===========================
+# Android Studio
+# ===========================
+*.iml
+.idea/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# ===========================
 # Gradle
+# ===========================
 .gradle/
 build/
 **/build/
+.cxx/
 
-# Local config
+# ===========================
+# Local Configuration
+# ===========================
 local.properties
 
-# Android Studio
-.idea/
-*.iml
-
-# Logs
-*.log
-
-# macOS
-.DS_Store
-
+# ===========================
 # Kotlin
+# ===========================
 .kotlin/
 
-# Generated
+# ===========================
+# Logs
+# ===========================
+*.log
+
+# ===========================
+# macOS
+# ===========================
+.DS_Store
+
+# ===========================
+# Android Captures
+# ===========================
 captures/
+.externalNativeBuild/
+
+# ===========================
+# Generated Files
+# ===========================
+*.apk
+*.ap_
+*.aab
+*.dex
+
+# ===========================
+# Keystore Files
+# ===========================
+*.jks
+*.keystore
+
+# ===========================
+# IntelliJ
+# ===========================
+out/
+
+# ===========================
+# Temporary Files
+# ===========================
+*.tmp
+*.swp
+*.orig
+
+# ===========================
+# Secrets
+# ===========================
+.env
+.env.*
+*.properties.local
