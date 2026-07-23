@@ -1,8 +1,12 @@
-# DevPulse AI 🚀
+<div align="center">
 
-> AI-powered Developer Growth Analyzer built for Android.
+# DevPulse AI
 
-> ⚠️ **Project Status:** Work in Progress (WIP)
+### AI-powered Developer Growth Analyzer
+
+⚠️ **Project Status:** Work in Progress (WIP)
+
+</div>
 
 ## Overview
 
