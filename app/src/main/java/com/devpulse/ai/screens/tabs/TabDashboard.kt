@@ -249,13 +249,13 @@ fun RepositoryAnalysisSection(metrics: RepoAnalysisMetrics) {
                     RepositoryStatRow(label = "Largest Repo", name = it.name, stat = "${it.size / 1024} MB")
                 }
                 metrics.recentlyUpdatedRepo?.let {
-                    RepositoryStatRow(label = "Recent Update", name = it.name, stat = it.pushedAt.take(10))
+                    RepositoryStatRow(label = "Recent Update", name = it.name, stat = it.pushedAt?.take(10) ?: "N/A")
                 }
                 metrics.newestRepo?.let {
-                    RepositoryStatRow(label = "Newest Repo", name = it.name, stat = it.createdAt.take(4))
+                    RepositoryStatRow(label = "Newest Repo", name = it.name, stat = it.createdAt?.take(4) ?: "N/A")
                 }
                 metrics.oldestRepo?.let {
-                    RepositoryStatRow(label = "Oldest Repo", name = it.name, stat = it.createdAt.take(4))
+                    RepositoryStatRow(label = "Oldest Repo", name = it.name, stat = it.createdAt?.take(4) ?: "N/A")
                 }
             }
         }
@@ -362,7 +362,7 @@ fun TopProjectsSection(profile: AnalyzedProfile) {
                             Text(text = "⑂ ${repo.forksCount}", color = TextSecondaryDark, fontSize = 12.sp)
                             Spacer(modifier = Modifier.weight(1f))
                             Text(
-                                text = "Updated: ${repo.pushedAt.take(10)}",
+                                text = "Updated: ${repo.pushedAt?.take(10) ?: "N/A"}",
                                 color = TextSecondaryDark,
                                 fontSize = 11.sp
                             )

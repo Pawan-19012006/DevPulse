@@ -8,19 +8,70 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.devpulse.ai.screens.DashboardScreen
+import com.devpulse.ai.screens.HomeScreen
+import com.devpulse.ai.screens.JourneyScreen
 import com.devpulse.ai.screens.LoginScreen
+import com.devpulse.ai.screens.SessionSetupScreen
+import com.devpulse.ai.viewmodel.HomeViewModel
 import com.devpulse.ai.viewmodel.LoginViewModel
 import com.devpulse.ai.viewmodel.ProfileViewModel
+import com.devpulse.ai.viewmodel.SessionViewModel
 
 @Composable
 fun NavGraph(navController: NavHostController) {
-    // Shared ViewModel at the NavGraph level so state is preserved during transition
+    // Shared ViewModel for GitHub telemetry & developer context
     val profileViewModel: ProfileViewModel = viewModel()
+    val homeViewModel: HomeViewModel = viewModel()
+    val sessionViewModel: SessionViewModel = viewModel()
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Login.route
+        startDestination = Screen.Home.route
     ) {
+        // Daily Pulse Home - Main entry point
+        composable(Screen.Home.route) {
+            HomeScreen(
+                viewModel = homeViewModel,
+                onNavigateToSessionSetup = {
+                    navController.navigate(Screen.SessionSetup.route)
+                },
+                onNavigateToJourney = {
+                    navController.navigate(Screen.Journey.route)
+                },
+                onNavigateToGitHubContext = { username ->
+                    if (!username.isNullOrBlank()) {
+                        navController.navigate(Screen.Dashboard.createRoute(username))
+                    } else {
+                        navController.navigate(Screen.Login.route)
+                    }
+                }
+            )
+        }
+
+        // Session Setup & Pre-Session Ritual
+        composable(Screen.SessionSetup.route) {
+            SessionSetupScreen(
+                viewModel = sessionViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onSessionStarted = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // My Journey & 1% Better Log
+        composable(Screen.Journey.route) {
+            JourneyScreen(
+                viewModel = sessionViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // GitHub Connect Screen (Preserved developer context)
         composable(Screen.Login.route) {
             val loginViewModel: LoginViewModel = viewModel()
             LoginScreen(
@@ -31,6 +82,8 @@ fun NavGraph(navController: NavHostController) {
                 }
             )
         }
+
+        // GitHub Telemetry & Developer Context Dashboard (Preserved)
         composable(
             route = Screen.Dashboard.route,
             arguments = listOf(

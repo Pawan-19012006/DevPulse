@@ -1,44 +1,54 @@
 package com.devpulse.ai.utils
 
+import com.devpulse.ai.data.local.entity.*
+import com.devpulse.ai.domain.*
 import com.devpulse.ai.model.GitHubRepo
+import com.devpulse.ai.model.GitHubRepoOwner
 import com.devpulse.ai.model.GitHubUser
-import com.devpulse.ai.repository.GitHubDataPackage
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
-// Data wrapper containing all calculated metrics for the Dashboard
+// Data wrapper containing real factual metrics for the UI
 data class AnalyzedProfile(
     val user: GitHubUser,
     val formattedCreatedAt: String,
     val formattedUpdatedAt: String,
-    
-    // Section 2 Statistics
+
+    // Profile Statistics
     val followersCount: Int,
     val followingCount: Int,
     val publicReposCount: Int,
     val publicGistsCount: Int,
-    
-    // Section 3 Repository Analysis
+
+    // Repository Analysis
     val repoAnalysis: RepoAnalysisMetrics,
-    
-    // Section 4 Language Analysis
+
+    // Language Analysis
     val languageAnalysis: LanguageAnalysisMetrics,
-    
-    // Section 5 Project Analysis (Top 5)
+
+    // Top Projects
     val topProjects: List<GitHubRepo>,
-    
-    // Section 6 Developer Metrics
+
+    // Real Developer Activity Signals & Metrics
     val devMetrics: DeveloperMetricsScores,
-    
-    // Section 7 Skill Detection
+
+    // Skill Evidences
     val detectedSkills: List<String>,
-    
-    // Section 8 Activity Analysis
+    val skillEvidences: List<SkillEvidenceEntity>,
+
+    // Real Activity Signals
     val activityAnalysis: ActivityAnalysisMetrics,
-    
-    // Section 9 AI Insights
+    val activitySignals: ActivitySignals,
+    val comparison7Days: ComparisonResult<Int>,
+    val comparison30Days: ComparisonResult<Int>,
+
+    // AI Insights (100% grounded in real activity)
     val aiInsights: DeveloperAiInsights,
-    
-    // Section 10 Learning Roadmap
+
+    // Dynamic Learning Roadmap based on detected skills
     val learningRoadmap: List<RoadmapStep>
 )
 
@@ -59,7 +69,7 @@ data class LanguageAnalysisMetrics(
     val mostUsed: String,
     val secondMostUsed: String,
     val thirdMostUsed: String,
-    val distribution: List<LanguageShare> // Name, percentage
+    val distribution: List<LanguageShare>
 )
 
 data class LanguageShare(
@@ -69,13 +79,13 @@ data class LanguageShare(
 )
 
 data class DeveloperMetricsScores(
-    val backendScore: Int,
-    val frontendScore: Int,
-    val aiMlScore: Int,
-    val devopsScore: Int,
-    val openSourceScore: Int,
-    val problemSolvingScore: Int,
-    val overallScore: Int
+    val commitsCount: Int,
+    val prsCount: Int,
+    val issuesCount: Int,
+    val activeReposCount: Int,
+    val activeDaysCount: Int,
+    val reviewsCount: Int,
+    val totalSignals: Int
 )
 
 data class DeveloperAiInsights(
@@ -98,7 +108,7 @@ data class RoadmapStep(
 )
 
 data class ActivityPoint(
-    val label: String, // E.g., Year "2023"
+    val label: String,
     val value: Int
 )
 
@@ -111,26 +121,76 @@ data class ActivityAnalysisMetrics(
 
 object AnalysisEngine {
 
-    fun analyze(data: GitHubDataPackage): AnalyzedProfile {
-        val user = data.user
-        val repos = data.repos
+    private val gson = Gson()
+    private val stringListType = object : TypeToken<List<String>>() {}.type
 
-        // 1. Date Formats
-        val formattedCreated = formatGitHubDate(user.createdAt)
-        val formattedUpdated = formatGitHubDate(user.updatedAt)
+    fun buildAnalyzedProfile(
+        profile: DeveloperProfileEntity,
+        repos: List<RepositoryEntity>,
+        events: List<DeveloperEventEntity>,
+        skills: List<SkillEvidenceEntity>,
+        snapshots: List<ActivitySnapshotEntity>,
+        now: Long = System.currentTimeMillis()
+    ): AnalyzedProfile {
+        val user = GitHubUser(
+            login = profile.username,
+            avatarUrl = profile.avatarUrl,
+            name = profile.name,
+            bio = profile.bio,
+            company = profile.company,
+            location = profile.location,
+            blog = profile.blog,
+            twitterUsername = profile.twitterUsername,
+            hireable = profile.hireable,
+            followers = profile.followers,
+            following = profile.following,
+            publicRepos = profile.publicRepos,
+            publicGists = profile.publicGists,
+            createdAt = profile.githubCreatedAt,
+            updatedAt = profile.githubUpdatedAt,
+            email = profile.email
+        )
 
-        // 2. Repo Analysis
-        val totalRepos = repos.size
-        val totalStars = repos.sumOf { it.stargazersCount }
-        val totalForks = repos.sumOf { it.forksCount }
+        val formattedCreated = formatGitHubDate(profile.githubCreatedAt)
+        val formattedUpdated = formatGitHubDate(profile.githubUpdatedAt)
+
+        // Convert RepositoryEntity to GitHubRepo for UI compatibility
+        val mappedRepos = repos.map { r ->
+            GitHubRepo(
+                id = r.id,
+                name = r.name,
+                fullName = r.fullName,
+                owner = GitHubRepoOwner(r.owner, profile.avatarUrl),
+                description = r.description,
+                language = r.primaryLanguage,
+                stargazersCount = r.stargazersCount,
+                forksCount = r.forksCount,
+                watchersCount = r.forksCount,
+                openIssuesCount = r.openIssuesCount,
+                isFork = r.isFork,
+                isArchived = r.isArchived,
+                defaultBranch = r.defaultBranch,
+                createdAt = formatEpochToIso(r.createdAt),
+                updatedAt = formatEpochToIso(r.updatedAt),
+                pushedAt = formatEpochToIso(r.pushedAt),
+                size = r.sizeKb,
+                topics = parseTopics(r.topicsJson),
+                private = false
+            )
+        }
+
+        // Repository metrics
+        val totalRepos = mappedRepos.size
+        val totalStars = mappedRepos.sumOf { it.stargazersCount }
+        val totalForks = mappedRepos.sumOf { it.forksCount }
         val avgStars = if (totalRepos > 0) totalStars.toFloat() / totalRepos else 0f
         val avgForks = if (totalRepos > 0) totalForks.toFloat() / totalRepos else 0f
 
-        val largestRepo = repos.maxByOrNull { it.size }
-        val mostStarredRepo = repos.maxByOrNull { it.stargazersCount }
-        val recentlyUpdatedRepo = repos.maxByOrNull { it.pushedAt }
-        val oldestRepo = repos.minByOrNull { it.createdAt }
-        val newestRepo = repos.maxByOrNull { it.createdAt }
+        val largestRepo = mappedRepos.maxByOrNull { it.size }
+        val mostStarredRepo = mappedRepos.maxByOrNull { it.stargazersCount }
+        val recentlyUpdatedRepo = mappedRepos.maxByOrNull { it.pushedAt ?: "" }
+        val oldestRepo = mappedRepos.filter { !it.createdAt.isNullOrBlank() }.minByOrNull { it.createdAt ?: "" }
+        val newestRepo = mappedRepos.filter { !it.createdAt.isNullOrBlank() }.maxByOrNull { it.createdAt ?: "" }
 
         val repoMetrics = RepoAnalysisMetrics(
             totalRepos = totalRepos,
@@ -145,9 +205,9 @@ object AnalysisEngine {
             newestRepo = newestRepo
         )
 
-        // 3. Language Analysis
+        // Language analysis
         val languageCounts = mutableMapOf<String, Int>()
-        repos.forEach { repo ->
+        mappedRepos.forEach { repo ->
             repo.language?.let { lang ->
                 languageCounts[lang] = (languageCounts[lang] ?: 0) + 1
             }
@@ -192,207 +252,155 @@ object AnalysisEngine {
             distribution = languageShares
         )
 
-        // 4. Top Projects
-        val topProjects = repos.sortedByDescending { it.stargazersCount }.take(5)
+        val topProjects = mappedRepos.sortedByDescending { it.stargazersCount }.take(5)
 
-        // 5. Skill Detection
-        val detectedSkills = mutableSetOf<String>()
-        val skillKeywords = mapOf(
-            "fastapi" to "FastAPI", "django" to "Django", "flask" to "Flask",
-            "react" to "React", "angular" to "Angular", "springboot" to "Spring Boot",
-            "spring boot" to "Spring Boot", "nodejs" to "Node.js", "node.js" to "Node.js",
-            "docker" to "Docker", "kubernetes" to "Kubernetes", "k8s" to "Kubernetes",
-            "tensorflow" to "TensorFlow", "pytorch" to "PyTorch", "sql" to "SQL",
-            "mongodb" to "MongoDB", "redis" to "Redis", "firebase" to "Firebase",
-            "aws" to "AWS", "azure" to "Azure", "gcp" to "GCP", "google cloud" to "GCP",
-            "git" to "Git", "github" to "GitHub", "linux" to "Linux"
+        // Compute real activity signals
+        val signals30d = ActivityAggregator.computeSignals(events, TimeWindow.Last30Days(now))
+        val signals7d = ActivityAggregator.computeSignals(events, TimeWindow.Last7Days(now))
+        val prev7d = ActivityAggregator.computeSignals(events, TimeWindow.Previous7Days(now))
+        val prev30d = ActivityAggregator.computeSignals(events, TimeWindow.Previous30Days(now))
+
+        val hasPrior7dData = events.any { it.timestamp in TimeWindow.Previous7Days(now).startTime..TimeWindow.Previous7Days(now).endTime }
+        val hasPrior30dData = events.any { it.timestamp in TimeWindow.Previous30Days(now).startTime..TimeWindow.Previous30Days(now).endTime }
+
+        val comparison7Days = ActivityAggregator.compareMetric(
+            signals7d.commitsCount,
+            prev7d.commitsCount,
+            hasHistoricalData = hasPrior7dData
         )
 
-        // Populate primary languages
-        repos.forEach { repo ->
-            repo.language?.let { detectedSkills.add(it) }
-            val nameLower = repo.name.lowercase(Locale.getDefault())
-            val descLower = (repo.description ?: "").lowercase(Locale.getDefault())
-            skillKeywords.forEach { (key, value) ->
-                if (nameLower.contains(key) || descLower.contains(key)) {
-                    detectedSkills.add(value)
-                }
-            }
-        }
-        val finalSkills = detectedSkills.take(15).toList() // Limit to 15 key skills
-
-        // 6. Heuristic Scoring (Calculated realistically)
-        val hasBackendLangs = repos.any { it.language in listOf("Kotlin", "Java", "Go", "Rust", "Python", "C#", "C++") }
-        val hasFrontendLangs = repos.any { it.language in listOf("JavaScript", "TypeScript", "HTML", "CSS") }
-        val hasAiLangs = repos.any { it.language == "Python" || it.name.lowercase(Locale.getDefault()).contains("ml") || it.name.lowercase(Locale.getDefault()).contains("ai") }
-        
-        var backendPoints = 0
-        var frontendPoints = 0
-        var aiPoints = 0
-        var devopsPoints = 0
-        
-        repos.forEach { repo ->
-            val lang = repo.language
-            val name = repo.name.lowercase(Locale.getDefault())
-            val desc = (repo.description ?: "").lowercase(Locale.getDefault())
-            
-            // Backend rules
-            if (lang in listOf("Kotlin", "Java", "Go", "Rust", "C#", "C++")) {
-                backendPoints += 15 + (repo.stargazersCount * 2)
-            }
-            if (name.contains("server") || name.contains("api") || desc.contains("backend") || desc.contains("database")) {
-                backendPoints += 10
-            }
-            
-            // Frontend rules
-            if (lang in listOf("JavaScript", "TypeScript", "HTML", "CSS")) {
-                frontendPoints += 15 + (repo.stargazersCount * 2)
-            }
-            if (name.contains("client") || name.contains("web") || name.contains("ui") || desc.contains("frontend") || desc.contains("css")) {
-                frontendPoints += 10
-            }
-
-            // AI/ML rules
-            if (lang == "Python" && (name.contains("learn") || name.contains("model") || desc.contains("pytorch") || desc.contains("tensorflow"))) {
-                aiPoints += 25
-            }
-            if (name.contains("ai") || name.contains("nlp") || name.contains("gpt") || desc.contains("machine learning")) {
-                aiPoints += 15
-            }
-
-            // DevOps rules
-            if (lang == "Go" && (name.contains("infra") || name.contains("k8s") || name.contains("docker"))) {
-                devopsPoints += 25
-            }
-            if (name.contains("docker") || name.contains("deploy") || name.contains("ci") || name.contains("cd") || desc.contains("kubernetes") || desc.contains("workflow")) {
-                devopsPoints += 15
-            }
-        }
-
-        val backendScore = capScore(if (hasBackendLangs) 40 + backendPoints else 10 + backendPoints)
-        val frontendScore = capScore(if (hasFrontendLangs) 40 + frontendPoints else 10 + frontendPoints)
-        val aiScore = capScore(if (hasAiLangs) 30 + aiPoints else 10 + aiPoints)
-        val devopsScore = capScore(25 + devopsPoints)
-
-        // Open Source: Based on stars, forks, followers, and how many repos of theirs are popular
-        val osPoints = (totalStars * 3) + (totalForks * 5) + (user.followers * 2)
-        val openSourceScore = capScore(20 + osPoints)
-
-        // Problem Solving: Based on average stars, repos count, languages, and repo age
-        val psPoints = (avgStars * 10).toInt() + (totalRepos * 2) + finalSkills.size
-        val problemSolvingScore = capScore(35 + psPoints)
-
-        // Overall: weighted average
-        val overallScore = capScore(
-            (backendScore * 0.20f +
-             frontendScore * 0.15f +
-             aiScore * 0.15f +
-             devopsScore * 0.15f +
-             openSourceScore * 0.15f +
-             problemSolvingScore * 0.20f).toInt()
+        val comparison30Days = ActivityAggregator.compareMetric(
+            signals30d.commitsCount,
+            prev30d.commitsCount,
+            hasHistoricalData = hasPrior30dData
         )
 
-        val scores = DeveloperMetricsScores(
-            backendScore = backendScore,
-            frontendScore = frontendScore,
-            aiMlScore = aiScore,
-            devopsScore = devopsScore,
-            openSourceScore = openSourceScore,
-            problemSolvingScore = problemSolvingScore,
-            overallScore = overallScore
+        val devMetrics = DeveloperMetricsScores(
+            commitsCount = signals30d.commitsCount,
+            prsCount = signals30d.prsOpenedCount + signals30d.prsMergedCount,
+            issuesCount = signals30d.issuesOpenedCount + signals30d.issuesClosedCount,
+            activeReposCount = signals30d.activeRepositoriesCount,
+            activeDaysCount = signals30d.activeDaysCount,
+            reviewsCount = signals30d.reviewsCount,
+            totalSignals = signals30d.totalSignals
         )
 
-        // 7. Activity Analysis (parse years from dates)
+        // Detected skills from SkillEvidenceEntity
+        val detectedSkills = skills.map { it.skillName }
+
+        // Activity points by year (derived from actual creation & push dates)
         val createdYears = mutableMapOf<String, Int>()
         val updatedYears = mutableMapOf<String, Int>()
+        val yearFormat = SimpleDateFormat("yyyy", Locale.US)
 
         repos.forEach { repo ->
-            val cYear = repo.createdAt.take(4)
-            val uYear = repo.pushedAt.take(4)
-            if (cYear.all { it.isDigit() }) {
+            if (repo.createdAt > 0) {
+                val cYear = yearFormat.format(Date(repo.createdAt))
                 createdYears[cYear] = (createdYears[cYear] ?: 0) + 1
             }
-            if (uYear.all { it.isDigit() }) {
+            if (repo.pushedAt > 0) {
+                val uYear = yearFormat.format(Date(repo.pushedAt))
                 updatedYears[uYear] = (updatedYears[uYear] ?: 0) + 1
             }
         }
 
-        val activityCreated = createdYears.entries.sortedBy { it.key }.map { ActivityPoint(it.key, it.value) }
-        val activityUpdated = updatedYears.entries.sortedBy { it.key }.map { ActivityPoint(it.key, it.value) }
-
         val activityAnalysis = ActivityAnalysisMetrics(
-            reposCreatedByYear = activityCreated.takeLast(5), // Keep last 5 active years
-            reposUpdatedByYear = activityUpdated.takeLast(5),
+            reposCreatedByYear = createdYears.entries.sortedBy { it.key }.map { ActivityPoint(it.key, it.value) }.takeLast(5),
+            reposUpdatedByYear = updatedYears.entries.sortedBy { it.key }.map { ActivityPoint(it.key, it.value) }.takeLast(5),
             starsEarned = totalStars,
             forksEarned = totalForks
         )
 
-        // 8. AI Insights (Rules-based Heuristic Generator)
-        val summary = "Developer @${user.login} shows high competence in $mostUsed. With a total of $totalRepos public repositories, they have generated a repository base that has accumulated $totalStars stars and $totalForks forks. Their overall engineering score indicates a developer with strong ${getTopDomainName(scores)} expertise."
-        
+        // Factual AI insights (derived strictly from collected real data)
+        val summary = "Developer @${user.login} maintains $totalRepos public repositories with primary language focus on $mostUsed. In recorded activity, they logged ${signals30d.commitsCount} commits across ${signals30d.activeRepositoriesCount} repositories."
+
         val strengths = mutableListOf<String>()
         val weaknesses = mutableListOf<String>()
         val skillGaps = mutableListOf<String>()
         val careers = mutableListOf<String>()
 
-        if (backendScore > 65) {
-            strengths.add("Robust backend architecture design and language proficiency ($mostUsed).")
-            careers.add("Backend Engineer")
+        val strongSkills = skills.filter { it.confidenceLevel == "STRONG" }.map { it.skillName }
+        if (strongSkills.isNotEmpty()) {
+            strengths.add("Established competencies with verified multi-repo evidence: ${strongSkills.take(3).joinToString(", ")}.")
         }
-        if (frontendScore > 65) {
-            strengths.add("Modern responsive UI development and frontend layout integration.")
-            careers.add("Frontend Engineer")
+        if (signals30d.activeDaysCount >= 5) {
+            strengths.add("Active code writing cadence (${signals30d.activeDaysCount} distinct active days recorded in the last 30 days).")
         }
-        if (openSourceScore > 50) {
-            strengths.add("Excellent community engagement and open source contribution impact.")
+        if (totalStars > 0) {
+            strengths.add("Public open source validation with $totalStars total stars across repositories.")
         } else {
-            weaknesses.add("Limited collaborative project distribution (forks & stars counts are low).")
+            weaknesses.add("Zero community stars detected on public repositories.")
         }
 
-        if (devopsScore < 45) {
-            weaknesses.add("Minimal Infrastructure and CI/CD pipelines tooling detected.")
-            skillGaps.add("Docker containerization & GitHub Actions automated pipelines.")
-            careers.add("DevOps Engineer")
+        if (signals30d.prsOpenedCount + signals30d.prsMergedCount == 0) {
+            weaknesses.add("No recent Pull Request activity observed in the current tracking window.")
         }
-        if (aiScore < 45) {
-            skillGaps.add("Machine Learning fundamentals (TensorFlow/PyTorch) and dataset manipulation.")
-            careers.add("AI Engineer")
+        if (signals30d.reviewsCount == 0) {
+            weaknesses.add("No code review participation recorded in the current activity stream.")
         }
 
-        if (strengths.isEmpty()) strengths.add("Active code writing and project creation consistency.")
-        if (weaknesses.isEmpty()) weaknesses.add("Could benefit from writing unit tests and API documentation templates.")
-        if (skillGaps.isEmpty()) skillGaps.add("Cloud deployment strategies (AWS/GCP/Azure).")
-        if (careers.isEmpty()) {
-            careers.add("Full Stack Developer")
-        } else if (careers.size == 1) {
-            careers.add("Full Stack Developer")
+        val commonDevOps = listOf("Docker", "Kubernetes", "Ci/cd", "Github Actions")
+        if (skills.none { it.skillName in commonDevOps }) {
+            skillGaps.add("DevOps & CI/CD workflow automation")
+        }
+        val commonCloud = listOf("Aws", "Gcp", "Azure")
+        if (skills.none { it.skillName in commonCloud }) {
+            skillGaps.add("Public cloud deployment & infrastructure")
+        }
+
+        if (strengths.isEmpty()) strengths.add("Active repository maintenance on GitHub.")
+        if (weaknesses.isEmpty()) weaknesses.add("Could benefit from more frequent public contribution events.")
+        if (skillGaps.isEmpty()) skillGaps.add("Advanced distributed systems and asynchronous orchestration.")
+
+        // Grounded career roles based on actual detected skills
+        when {
+            mostUsed in listOf("Kotlin", "Swift") -> {
+                careers.add("Mobile Engineer")
+                careers.add("Android / iOS Developer")
+            }
+            mostUsed in listOf("Python") -> {
+                careers.add("Backend Engineer")
+                careers.add("Data / AI Engineer")
+            }
+            mostUsed in listOf("JavaScript", "TypeScript", "HTML", "CSS") -> {
+                careers.add("Frontend Engineer")
+                careers.add("Full Stack Developer")
+            }
+            mostUsed in listOf("Go", "Rust") -> {
+                careers.add("Systems Engineer")
+                careers.add("Cloud Infrastructure Engineer")
+            }
+            else -> {
+                careers.add("Software Engineer")
+                careers.add("Full Stack Developer")
+            }
         }
 
         val projectQuality = when {
-            avgStars > 15 -> "High (Highly starred key repositories indicating community validation)"
-            avgStars > 3 -> "Moderate (Healthy interaction and star ratings)"
-            else -> "Initial (Developer has utility and personal projects requiring additional promotion)"
+            avgStars > 10 -> "High (Averaging ${String.format("%.1f", avgStars)} stars per repository)"
+            avgStars > 1 -> "Moderate (Active community interaction and stars)"
+            else -> "Personal / Utility (${totalRepos} repositories currently maintained)"
         }
 
         val projectDiversity = when {
-            languageCounts.size >= 5 -> "High (Proficient across ${languageCounts.size} distinct languages)"
-            languageCounts.size >= 3 -> "Moderate (Flexible with ${languageCounts.size} languages)"
-            else -> "Specialized (Deeply focused on ${languageCounts.size} core languages)"
+            languageCounts.size >= 5 -> "High (Spanning ${languageCounts.size} distinct languages)"
+            languageCounts.size >= 2 -> "Moderate (${languageCounts.size} languages utilized)"
+            else -> "Focused (Concentrated primarily in $mostUsed)"
         }
 
         val osContribution = when {
-            user.followers > 20 || totalForks > 10 -> "High Contributor"
-            totalStars > 2 -> "Moderate Contributor"
-            else -> "Solo Developer"
+            user.followers > 20 || totalForks > 10 -> "Active Community Contributor"
+            totalStars > 5 -> "Growing Contributor"
+            else -> "Independent Developer"
         }
 
-        val consistency = if (repos.any { it.pushedAt.take(4) == "2026" }) {
-            "Consistently Active (Pushed code recently in 2026)"
+        val consistency = if (signals30d.activeDaysCount > 0) {
+            "Active (${signals30d.activeDaysCount} active days in the last 30 days)"
         } else {
-            "Periodic (Last push detected in earlier years)"
+            "Periodic (No recorded events in the last 30-day window)"
         }
 
-        val growthText = "Developer accounts show a growth path since $formattedCreated, with active pushes and repository creations peaking in ${activityCreated.maxByOrNull { it.value }?.label ?: "recent years"}."
+        val growthText = "Account registered on $formattedCreated with $totalRepos public repositories and $totalStars stars earned to date."
 
         val aiInsights = DeveloperAiInsights(
             summary = summary,
@@ -407,8 +415,8 @@ object AnalysisEngine {
             careerRecommendations = careers.take(2)
         )
 
-        // 9. Personalized Roadmap Steps
-        val learningRoadmap = generateRoadmap(scores, mostUsed, finalSkills)
+        // Dynamic roadmap grounded in actual detected languages
+        val learningRoadmap = generateDynamicRoadmap(mostUsed, skills)
 
         return AnalyzedProfile(
             user = user,
@@ -421,24 +429,62 @@ object AnalysisEngine {
             repoAnalysis = repoMetrics,
             languageAnalysis = languageMetrics,
             topProjects = topProjects,
-            devMetrics = scores,
-            detectedSkills = finalSkills,
+            devMetrics = devMetrics,
+            detectedSkills = detectedSkills,
+            skillEvidences = skills,
             activityAnalysis = activityAnalysis,
+            activitySignals = signals30d,
+            comparison7Days = comparison7Days,
+            comparison30Days = comparison30Days,
             aiInsights = aiInsights,
             learningRoadmap = learningRoadmap
         )
     }
 
-    private fun capScore(score: Int): Int = score.coerceIn(10, 98) // Production apps avoid 100 to feel realistic
+    private fun generateDynamicRoadmap(
+        primaryLang: String,
+        skills: List<SkillEvidenceEntity>
+    ): List<RoadmapStep> {
+        val roadmap = mutableListOf<RoadmapStep>()
 
-    private fun getTopDomainName(scores: DeveloperMetricsScores): String {
-        val list = listOf(
-            "Backend" to scores.backendScore,
-            "Frontend" to scores.frontendScore,
-            "AI/ML" to scores.aiMlScore,
-            "DevOps" to scores.devopsScore
+        roadmap.add(
+            RoadmapStep(
+                title = "1. Advance $primaryLang Proficiency",
+                description = "Focus on performance benchmarking, asynchronous primitives, and architectural design patterns in $primaryLang.",
+                skills = listOf(primaryLang, "Architecture", "Performance")
+            )
         )
-        return list.maxByOrNull { it.second }?.first ?: "Generalist"
+
+        val skillNames = skills.map { it.skillName }
+        if (!skillNames.any { it.contains("Test", ignoreCase = true) }) {
+            roadmap.add(
+                RoadmapStep(
+                    title = "2. Automated Testing & Reliability",
+                    description = "Integrate comprehensive unit testing, mock fixtures, and mutation testing suites into active repositories.",
+                    skills = listOf("Unit Testing", "Mocking", "CI")
+                )
+            )
+        }
+
+        if (!skillNames.any { it.contains("Docker", ignoreCase = true) || it.contains("Actions", ignoreCase = true) }) {
+            roadmap.add(
+                RoadmapStep(
+                    title = "3. CI/CD & Automated Pipelines",
+                    description = "Automate linting, unit tests, and artifact publishing using GitHub Actions workflows.",
+                    skills = listOf("GitHub Actions", "Docker", "Automation")
+                )
+            )
+        }
+
+        roadmap.add(
+            RoadmapStep(
+                title = "4. Open Source Collaboration",
+                description = "Participate in pull request reviews and contribute upstream bug fixes to ecosystem dependencies.",
+                skills = listOf("Code Review", "PR Workflows", "Open Source")
+            )
+        )
+
+        return roadmap
     }
 
     private fun formatGitHubDate(dateStr: String): String {
@@ -464,80 +510,16 @@ object AnalysisEngine {
         return "$monthName $day, $year"
     }
 
-    private fun generateRoadmap(
-        scores: DeveloperMetricsScores,
-        primaryLang: String,
-        skills: List<String>
-    ): List<RoadmapStep> {
-        val roadmap = mutableListOf<RoadmapStep>()
+    private fun formatEpochToIso(millis: Long): String {
+        val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+        return format.format(Date(millis))
+    }
 
-        // Step 1: Language Mastery
-        roadmap.add(
-            RoadmapStep(
-                title = "1. Master Advanced $primaryLang",
-                description = "Deepen language understanding. Focus on asynchronous runtimes, multithreading memory management, and advanced features.",
-                skills = listOf(primaryLang, "Algorithms", "Optimization")
-            )
-        )
-
-        // Step 2: DevOps & Containers (If weak)
-        if (scores.devopsScore < 50) {
-            roadmap.add(
-                RoadmapStep(
-                    title = "2. Learn Containerization & Orchestration",
-                    description = "Package applications using Docker container files and manage deployments with Kubernetes configurations.",
-                    skills = listOf("Docker", "Kubernetes", "CI/CD")
-                )
-            )
+    private fun parseTopics(topicsJson: String): List<String> {
+        return try {
+            gson.fromJson(topicsJson, stringListType) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
         }
-
-        // Step 3: Cloud Architectures
-        if (skills.none { it in listOf("AWS", "Azure", "GCP") }) {
-            roadmap.add(
-                RoadmapStep(
-                    title = "3. Deploy to Public Clouds",
-                    description = "Migrate simple utilities to AWS or GCP. Utilize serverless configurations, database persistence nodes, and network gateways.",
-                    skills = listOf("AWS", "GCP", "Serverless")
-                )
-            )
-        } else {
-            roadmap.add(
-                RoadmapStep(
-                    title = "3. System Architecture Design",
-                    description = "Learn distributed caching, microservice synchronization, queue messaging, and high availability systems design.",
-                    skills = listOf("System Design", "Redis", "Kafka")
-                )
-            )
-        }
-
-        // Step 4: AI & Future Toolings
-        if (scores.aiMlScore < 50) {
-            roadmap.add(
-                RoadmapStep(
-                    title = "4. AI Integration & LLM APIs",
-                    description = "Integrate LLM API calls, embeddings, vector databases (Pinecone/Chroma), and prompt configurations into your backend applications.",
-                    skills = listOf("Python", "LangChain", "Vector DBs")
-                )
-            )
-        } else {
-            roadmap.add(
-                RoadmapStep(
-                    title = "4. Deep Learning Pipelines",
-                    description = "Train neural network models using PyTorch on GPUs. Optimize weights and integrate with inference servers.",
-                    skills = listOf("PyTorch", "CUDA", "Model Ops")
-                )
-            )
-        }
-
-        // Step 5: Advanced Engineering
-        roadmap.add(
-            RoadmapStep(
-                title = "5. Deploy & Monitor Production Systems",
-                description = "Apply Prometheus monitoring dashboards, logging nodes, telemetry metrics tracking, and load balancing rules.",
-                skills = listOf("Prometheus", "Grafana", "Telemetry")
-            )
-        )
-
-        return roadmap
     }
 }

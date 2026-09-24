@@ -1,6 +1,5 @@
 package com.devpulse.ai.screens.tabs
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,24 +12,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devpulse.ai.components.GlowCard
+import com.devpulse.ai.domain.SyncStatus
 import com.devpulse.ai.ui.theme.Primary
 import com.devpulse.ai.ui.theme.Secondary
+import com.devpulse.ai.ui.theme.Tertiary
 import com.devpulse.ai.ui.theme.TextPrimaryDark
 import com.devpulse.ai.ui.theme.TextSecondaryDark
 
 @Composable
 fun TabSettings(
+    syncStatus: SyncStatus = SyncStatus.Idle,
+    onForceReload: () -> Unit = {},
+    onClearCache: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    val context = LocalContext.current
-    
-    var forceRefreshEnabled by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -40,45 +40,68 @@ fun TabSettings(
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Text(
-            text = "Settings",
+            text = "Settings & Data Foundation",
             color = TextPrimaryDark,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
 
-        // Preferences Card
+        // Synchronization Card
         GlowCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "Preferences", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Synchronization Engine", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 SettingsActionRow(
-                    title = "Force Live Reload",
-                    description = "Bypass local analysis cache, fetching fresh raw data from GitHub APIs.",
-                    actionText = if (forceRefreshEnabled) "ON" else "OFF",
-                    onClick = {
-                        forceRefreshEnabled = !forceRefreshEnabled
-                        val status = if (forceRefreshEnabled) "enabled" else "disabled"
-                        Toast.makeText(context, "Force Live Reload $status", Toast.LENGTH_SHORT).show()
-                    }
+                    title = "Force Real-time Sync",
+                    description = "Bypass 5-minute incremental threshold and fetch fresh event signals directly from GitHub APIs.",
+                    actionText = if (syncStatus is SyncStatus.Syncing) "SYNCING..." else "SYNC NOW",
+                    enabled = syncStatus !is SyncStatus.Syncing,
+                    onClick = onForceReload
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                val statusText = when (syncStatus) {
+                    is SyncStatus.Syncing -> "Currently fetching repositories and event streams..."
+                    is SyncStatus.Success -> "Up to date (persisted in local Room database)"
+                    is SyncStatus.PartialSuccess -> "Partially synced: ${syncStatus.warning}"
+                    is SyncStatus.Failed -> "Sync failed: ${syncStatus.error}"
+                    is SyncStatus.Idle -> "Idle / Cached"
+                }
+                Text(
+                    text = "Status: $statusText",
+                    color = if (syncStatus is SyncStatus.Failed) Tertiary else TextSecondaryDark,
+                    fontSize = 12.sp
                 )
             }
         }
 
-        // Cache Management
+        // Cache & Database Management
         GlowCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "Cache Management", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Local Room Persistence", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 SettingsActionRow(
-                    title = "Clear Local Profile Cache",
-                    description = "Deletes all cached metadata, analysis figures, and session repositories.",
-                    actionText = "Clear",
-                    onClick = {
-                        Toast.makeText(context, "Local Profile Cache Cleared", Toast.LENGTH_SHORT).show()
-                    }
+                    title = "Wipe Local Intelligence Cache",
+                    description = "Deletes all locally stored profiles, repositories, normalized events, skill evidences, and snapshots from Room.",
+                    actionText = "WIPE DB",
+                    actionColor = Tertiary,
+                    onClick = onClearCache
                 )
+            }
+        }
+
+        // Security Architecture Card
+        GlowCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(text = "Security & Auth Architecture", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                AboutRow(label = "Current Auth Provider", value = "BuildConfigTokenProvider")
+                AboutRow(label = "Target Production Architecture", value = "OAuth 2.0 + PKCE")
+                AboutRow(label = "Token Storage Target", value = "EncryptedSharedPreferences")
+                AboutRow(label = "Rate Limit Tier", value = "5,000 req/hr (Authenticated)")
             }
         }
 
@@ -86,12 +109,12 @@ fun TabSettings(
         GlowCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(text = "About DevPulse AI", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                AboutRow(label = "Application Version", value = "1.0.0")
-                AboutRow(label = "Aesthetic Base", value = "Linear / GitHub Mobile Dark")
-                AboutRow(label = "Design System", value = "Compose Material 3")
-                AboutRow(label = "API Limit status", value = "Dynamic REST (Rate limit aware)")
+                AboutRow(label = "Architecture Version", value = "Phase 1: Real Data Foundation")
+                AboutRow(label = "Local Storage", value = "Room 2.6.1 + KSP")
+                AboutRow(label = "Event Normalization", value = "Multi-event decomposition")
+                AboutRow(label = "Evidence Model", value = "Factual SkillConfidence")
             }
         }
     }
@@ -102,6 +125,8 @@ fun SettingsActionRow(
     title: String,
     description: String,
     actionText: String,
+    enabled: Boolean = true,
+    actionColor: Color = Secondary,
     onClick: () -> Unit
 ) {
     Row(
@@ -120,10 +145,15 @@ fun SettingsActionRow(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF1E212E))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            Text(text = actionText, color = Secondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = actionText,
+                color = if (enabled) actionColor else TextSecondaryDark,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -136,7 +166,7 @@ fun AboutRow(label: String, value: String) {
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text = label, color = TextSecondaryDark, fontSize = 13.sp)
-        Text(text = value, color = TextPrimaryDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(text = label, color = TextSecondaryDark, fontSize = 12.sp)
+        Text(text = value, color = TextPrimaryDark, fontSize = 12.sp, fontWeight = FontWeight.Medium)
     }
 }

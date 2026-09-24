@@ -1,8 +1,5 @@
 package com.devpulse.ai.screens.tabs
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,19 +11,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devpulse.ai.components.GlowCard
+import com.devpulse.ai.data.local.entity.SkillEvidenceEntity
+import com.devpulse.ai.domain.ComparisonResult
 import com.devpulse.ai.ui.theme.Primary
 import com.devpulse.ai.ui.theme.Secondary
 import com.devpulse.ai.ui.theme.Tertiary
 import com.devpulse.ai.ui.theme.TextPrimaryDark
 import com.devpulse.ai.ui.theme.TextSecondaryDark
 import com.devpulse.ai.utils.AnalyzedProfile
-import com.devpulse.ai.utils.DeveloperMetricsScores
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -43,9 +39,9 @@ fun TabInsights(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // SECTION 6: DEVELOPER METRICS
+        // SECTION 1: REAL DEVELOPER ACTIVITY SIGNALS
         Text(
-            text = "Developer Metrics",
+            text = "Developer Activity Signals",
             color = TextPrimaryDark,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
@@ -53,86 +49,82 @@ fun TabInsights(
 
         GlowCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(20.dp)) {
-                // Main Overall Score
+                // Header with Total Signals & Period Comparisons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    CircularProgressScore(
-                        score = profile.devMetrics.overallScore,
-                        label = "Overall",
-                        color = Primary,
-                        modifier = Modifier.size(100.dp)
-                    )
-                    Spacer(modifier = Modifier.width(20.dp))
                     Column {
                         Text(
-                            text = "AI Growth Index",
+                            text = "30-Day Activity Footprint",
                             color = TextPrimaryDark,
-                            fontSize = 18.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Calculated heuristic rating matching repository size, star counts, followers, and language stack diversity.",
+                            text = "Aggregated from verified Git commits, PRs, issues, and reviews",
                             color = TextSecondaryDark,
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${profile.devMetrics.totalSignals} Signals",
+                            color = Primary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF222533)))
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Breakdown Grid
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    CircularProgressScore(
-                        score = profile.devMetrics.backendScore,
-                        label = "Backend",
-                        color = Primary,
-                        modifier = Modifier.weight(1f).aspectRatio(1f)
+                // Factual Comparison Badges
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ComparisonCard(
+                        label = "7-Day Velocity",
+                        comparison = profile.comparison7Days,
+                        modifier = Modifier.weight(1f)
                     )
-                    CircularProgressScore(
-                        score = profile.devMetrics.frontendScore,
-                        label = "Frontend",
-                        color = Secondary,
-                        modifier = Modifier.weight(1f).aspectRatio(1f)
-                    )
-                    CircularProgressScore(
-                        score = profile.devMetrics.aiMlScore,
-                        label = "AI/ML",
-                        color = Tertiary,
-                        modifier = Modifier.weight(1f).aspectRatio(1f)
+                    ComparisonCard(
+                        label = "30-Day Velocity",
+                        comparison = profile.comparison30Days,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    CircularProgressScore(
-                        score = profile.devMetrics.devopsScore,
-                        label = "DevOps",
-                        color = Secondary,
-                        modifier = Modifier.weight(1f).aspectRatio(1f)
-                    )
-                    CircularProgressScore(
-                        score = profile.devMetrics.openSourceScore,
-                        label = "Open Source",
-                        color = Primary,
-                        modifier = Modifier.weight(1f).aspectRatio(1f)
-                    )
-                    CircularProgressScore(
-                        score = profile.devMetrics.problemSolvingScore,
-                        label = "Solving",
-                        color = Tertiary,
-                        modifier = Modifier.weight(1f).aspectRatio(1f)
-                    )
+
+                Spacer(modifier = Modifier.height(20.dp))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF222533)))
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Factual Activity Signal Metrics Grid
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SignalMetricTile(label = "Commits", count = profile.devMetrics.commitsCount, color = Primary, modifier = Modifier.weight(1f))
+                    SignalMetricTile(label = "Pull Requests", count = profile.devMetrics.prsCount, color = Secondary, modifier = Modifier.weight(1f))
+                    SignalMetricTile(label = "Issues", count = profile.devMetrics.issuesCount, color = Tertiary, modifier = Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SignalMetricTile(label = "Active Repos", count = profile.devMetrics.activeReposCount, color = Secondary, modifier = Modifier.weight(1f))
+                    SignalMetricTile(label = "Active Days", count = profile.devMetrics.activeDaysCount, color = Primary, modifier = Modifier.weight(1f))
+                    SignalMetricTile(label = "Code Reviews", count = profile.devMetrics.reviewsCount, color = Tertiary, modifier = Modifier.weight(1f))
                 }
             }
         }
 
-        // SECTION 7: SKILL DETECTION
+        // SECTION 2: VERIFIED SKILL EVIDENCE
         Text(
-            text = "Detected Skills",
+            text = "Verified Skill Evidence",
             color = TextPrimaryDark,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
@@ -141,33 +133,41 @@ fun TabInsights(
         GlowCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "Inferred Tech Stack",
+                    text = "Technology Evidence Stack",
                     color = TextPrimaryDark,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Parsed based on repo language bindings and description keywords",
+                    text = "Grounded in repository language bytes, commit records, and active dependencies",
                     color = TextSecondaryDark,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    profile.detectedSkills.forEach { skill ->
-                        SkillChip(skill)
+                if (profile.skillEvidences.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        profile.skillEvidences.take(8).forEach { skill ->
+                            SkillEvidenceRow(skill)
+                        }
+                    }
+                } else {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        profile.detectedSkills.forEach { skill ->
+                            SimpleSkillChip(skill)
+                        }
                     }
                 }
             }
         }
 
-        // SECTION 9: AI INSIGHTS
+        // SECTION 3: FACTUAL DEVELOPER INSIGHTS
         Text(
-            text = "AI Developer Insights",
+            text = "Developer Intelligence Insights",
             color = TextPrimaryDark,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
@@ -187,17 +187,17 @@ fun TabInsights(
 
                 Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF222533)))
 
-                // Strengths & Weaknesses
+                // Strengths & Observation Areas
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Strengths", color = Secondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Demonstrated Strengths", color = Secondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(6.dp))
                         profile.aiInsights.strengths.forEach { str ->
                             BulletPoint(text = str)
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Weaknesses", color = Tertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Observation Areas", color = Tertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(6.dp))
                         profile.aiInsights.weaknesses.forEach { weak ->
                             BulletPoint(text = weak)
@@ -207,17 +207,17 @@ fun TabInsights(
 
                 Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF222533)))
 
-                // Key metrics
+                // Key factual metrics
                 InsightMetaRow("Project Quality", profile.aiInsights.projectQuality)
                 InsightMetaRow("Project Diversity", profile.aiInsights.projectDiversity)
                 InsightMetaRow("OS Contribution", profile.aiInsights.openSourceContributionLevel)
-                InsightMetaRow("Consistency", profile.aiInsights.consistencyText)
+                InsightMetaRow("Activity Cadence", profile.aiInsights.consistencyText)
 
                 Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF222533)))
 
-                // Career Recommendations
+                // Role Alignments
                 Column {
-                    Text(text = "Suitable Roles", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Stack-Aligned Engineering Profiles", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         profile.aiInsights.careerRecommendations.forEach { role ->
@@ -238,66 +238,129 @@ fun TabInsights(
 }
 
 @Composable
-fun CircularProgressScore(
-    score: Int,
+fun SignalMetricTile(
     label: String,
+    count: Int,
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    var animationPlayed by remember { mutableStateOf(false) }
-    val animateFraction by animateFloatAsState(
-        targetValue = if (animationPlayed) (score / 100f) else 0f,
-        animationSpec = tween(durationMillis = 1000)
-    )
-
-    LaunchedEffect(Unit) {
-        animationPlayed = true
-    }
-
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF151722))
+            .padding(12.dp)
     ) {
-        Box(
-            modifier = Modifier.size(72.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val strokeWidth = 6.dp.toPx()
-                // Background Track
-                drawCircle(
-                    color = Color(0xFF1E212E),
-                    style = Stroke(width = strokeWidth)
-                )
-                // Score Arc
-                drawArc(
-                    color = color,
-                    startAngle = -90f,
-                    sweepAngle = animateFraction * 360f,
-                    useCenter = false,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-            }
-            Text(
-                text = score.toString(),
-                color = TextPrimaryDark,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+        Column {
+            Text(text = count.toString(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = label, color = TextSecondaryDark, fontSize = 11.sp, fontWeight = FontWeight.Medium)
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = label,
-            color = TextSecondaryDark,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
-        )
     }
 }
 
 @Composable
-fun SkillChip(skill: String) {
+fun ComparisonCard(
+    label: String,
+    comparison: ComparisonResult<Int>,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF151722))
+            .padding(10.dp)
+    ) {
+        Column {
+            Text(text = label, color = TextSecondaryDark, fontSize = 11.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            when (comparison) {
+                is ComparisonResult.Available -> {
+                    val pct = comparison.percentageChange
+                    if (pct != null) {
+                        val sign = if (pct >= 0) "+" else ""
+                        val color = if (pct >= 0) Primary else Tertiary
+                        Text(
+                            text = "$sign${String.format("%.0f", pct)}% vs prior",
+                            color = color,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "Steady",
+                            color = TextPrimaryDark,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                is ComparisonResult.InsufficientHistory -> {
+                    Text(
+                        text = "INSUFFICIENT HISTORY",
+                        color = TextSecondaryDark,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SkillEvidenceRow(skill: SkillEvidenceEntity) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF151722))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = skill.skillName,
+                color = TextPrimaryDark,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            val subText = if (skill.primaryLanguageRepoCount > 0) {
+                "${skill.primaryLanguageRepoCount} repos • ${skill.evidenceCount} signals"
+            } else {
+                "${skill.evidenceCount} signals observed"
+            }
+            Text(
+                text = subText,
+                color = TextSecondaryDark,
+                fontSize = 11.sp
+            )
+        }
+
+        val badgeColor = when (skill.confidenceLevel) {
+            "STRONG" -> Primary
+            "MODERATE" -> Secondary
+            else -> TextSecondaryDark
+        }
+
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(badgeColor.copy(alpha = 0.15f))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = skill.confidenceLevel,
+                color = badgeColor,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun SimpleSkillChip(skill: String) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))

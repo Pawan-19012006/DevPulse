@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -21,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.devpulse.ai.components.BrandBackground
 import com.devpulse.ai.components.ShimmerDashboardLoader
+import com.devpulse.ai.domain.SyncErrorType
+import com.devpulse.ai.domain.SyncStatus
 import com.devpulse.ai.screens.tabs.*
 import com.devpulse.ai.ui.theme.BackgroundDark
 import com.devpulse.ai.ui.theme.Primary
@@ -28,7 +29,6 @@ import com.devpulse.ai.ui.theme.Secondary
 import com.devpulse.ai.ui.theme.SurfaceDark
 import com.devpulse.ai.ui.theme.TextPrimaryDark
 import com.devpulse.ai.ui.theme.TextSecondaryDark
-import com.devpulse.ai.viewmodel.ErrorType
 import com.devpulse.ai.viewmodel.ProfileUiState
 import com.devpulse.ai.viewmodel.ProfileViewModel
 
@@ -41,6 +41,7 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val profile by viewModel.analyzedProfile.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
 
     // Trigger analysis only if the cached profile is missing
     LaunchedEffect(username, profile) {
@@ -64,9 +65,16 @@ fun DashboardScreen(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                            val syncText = when (val s = syncStatus) {
+                                is SyncStatus.Syncing -> "Syncing developer activity..."
+                                is SyncStatus.Success -> "Synced ${formatRelativeTime(s.lastSyncTime)}"
+                                is SyncStatus.PartialSuccess -> "Partially synced"
+                                is SyncStatus.Failed -> "Sync failed"
+                                is SyncStatus.Idle -> "Local intelligence ready"
+                            }
                             Text(
-                                text = "AI-growth summary",
-                                color = TextSecondaryDark,
+                                text = syncText,
+                                color = if (syncStatus is SyncStatus.Syncing) Primary else TextSecondaryDark,
                                 fontSize = 11.sp
                             )
                         }
@@ -169,7 +177,14 @@ fun DashboardScreen(
                         1 -> TabAnalytics(profile = currentProfile)
                         2 -> TabInsights(profile = currentProfile)
                         3 -> TabRoadmap(profile = currentProfile)
-                        4 -> TabSettings()
+                        4 -> TabSettings(
+                            syncStatus = syncStatus,
+                            onForceReload = { viewModel.fetchAndAnalyzeProfile(username, forceRefresh = true) },
+                            onClearCache = {
+                                viewModel.clearCache()
+                                onNavigateBack()
+                            }
+                        )
                     }
                 }
             }
@@ -184,7 +199,6 @@ fun DashboardScreen(
                             .fillMaxSize()
                             .statusBarsPadding()
                     ) {
-                        // Small header to keep back navigation available
                         TopAppBar(
                             title = { Text("Analyzing profile...", color = Color.White, fontSize = 16.sp) },
                             navigationIcon = {
@@ -205,14 +219,13 @@ fun DashboardScreen(
                 }
             }
             is ProfileUiState.Error -> {
-                // Error State: Show M3 Dialog and clean redirection
                 ErrorDialog(
                     title = when (state.errorType) {
-                        ErrorType.USER_NOT_FOUND -> "User Not Found"
-                        ErrorType.RATE_LIMIT -> "API Rate Limit"
-                        ErrorType.NETWORK -> "No Internet"
-                        ErrorType.EMPTY_REPOS -> "Empty Repositories"
-                        ErrorType.TOKEN_MISSING -> "Token Missing"
+                        SyncErrorType.USER_NOT_FOUND -> "User Not Found"
+                        SyncErrorType.RATE_LIMIT -> "API Rate Limit"
+                        SyncErrorType.NETWORK -> "No Internet"
+                        SyncErrorType.EMPTY_REPOS -> "Empty Repositories"
+                        SyncErrorType.TOKEN_MISSING -> "Token Missing"
                         else -> "Analysis Error"
                     },
                     message = state.message,
@@ -223,7 +236,6 @@ fun DashboardScreen(
                 )
             }
             is ProfileUiState.Success -> {
-                // Fallback (already covered by main if check, but required for compilation mapping)
                 Box(modifier = Modifier.fillMaxSize())
             }
         }
@@ -261,4 +273,17 @@ fun ErrorDialog(
         containerColor = SurfaceDark,
         shape = RoundedCornerShape(16.dp)
     )
+}
+
+private fun formatRelativeTime(millis: Long): String {
+    val diff = System.currentTimeMillis() - millis
+    val seconds = diff / 1000
+    val minutes = seconds / 60
+    val hours = minutes / 60
+    return when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "$minutes min ago"
+        hours < 24 -> "$hours hr ago"
+        else -> "${hours / 24} days ago"
+    }
 }

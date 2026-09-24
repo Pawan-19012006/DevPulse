@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -15,7 +16,8 @@ android {
     if (localPropertiesFile.exists()) {
         localPropertiesFile.inputStream().use { localProperties.load(it) }
     }
-    val githubToken = localProperties.getProperty("GITHUB_TOKEN") ?: ""
+    val rawGithubToken = localProperties.getProperty("GITHUB_TOKEN") ?: ""
+    val githubToken = rawGithubToken.trim().removeSurrounding("\"").removeSurrounding("'").trim()
 
     defaultConfig {
         applicationId = "com.devpulse.ai"
@@ -30,6 +32,10 @@ android {
         }
 
         buildConfigField("String", "GITHUB_TOKEN", "\"$githubToken\"")
+    }
+
+    tasks.matching { it.name.startsWith("generate") && it.name.endsWith("BuildConfig") }.configureEach {
+        inputs.file(localPropertiesFile).withPropertyName("localPropertiesFile").optional()
     }
 
     buildTypes {
@@ -76,7 +82,13 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.coil.compose)
 
+    // Local Persistence (Room)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
