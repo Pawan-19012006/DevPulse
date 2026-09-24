@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devpulse.ai.BuildConfig
 import com.devpulse.ai.domain.session.*
 import com.devpulse.ai.ui.theme.*
 import com.devpulse.ai.viewmodel.SessionViewModel
@@ -130,7 +132,8 @@ fun ActiveSessionScreen(
                         onPause = { viewModel.pause() },
                         onResume = { viewModel.resume() },
                         onEndEarly = { showEndEarlyDialog = true },
-                        onReportMindset = { viewModel.reportMindset(it) }
+                        onReportMindset = { viewModel.reportMindset(it) },
+                        onFastForward = { viewModel.fastForwardCurrentBlock() }
                     )
                 }
 
@@ -145,7 +148,8 @@ fun ActiveSessionScreen(
                         onPause = { viewModel.pause() },
                         onResume = { viewModel.resume() },
                         onEndEarly = { showEndEarlyDialog = true },
-                        onReportMindset = { viewModel.reportMindset(it) }
+                        onReportMindset = { viewModel.reportMindset(it) },
+                        onFastForward = { viewModel.fastForwardCurrentBlock() }
                     )
                 }
 
@@ -167,7 +171,8 @@ fun ActiveSessionScreen(
                         nextObjective = state.nextObjective,
                         remainingSeconds = state.remainingSeconds,
                         progressRatio = state.progressRatio,
-                        onEndRecoveryEarly = { viewModel.endRecoveryEarly() }
+                        onEndRecoveryEarly = { viewModel.endRecoveryEarly() },
+                        onFastForward = { viewModel.fastForwardCurrentBlock() }
                     )
                 }
 
@@ -290,7 +295,8 @@ private fun RunningClockContent(
     onPause: () -> Unit,
     onResume: () -> Unit,
     onEndEarly: () -> Unit,
-    onReportMindset: (DeveloperState) -> Unit
+    onReportMindset: (DeveloperState) -> Unit,
+    onFastForward: () -> Unit = {}
 ) {
     val minutes = remainingSeconds / 60
     val seconds = remainingSeconds % 60
@@ -424,6 +430,15 @@ private fun RunningClockContent(
                     }
                 }
             }
+        }
+
+        // Fast-Forward Prototype Control (Debug/Demo only)
+        item {
+            PrototypeFastForwardButton(
+                label = "⚡ FAST FORWARD",
+                sublabel = "Demo only",
+                onClick = onFastForward
+            )
         }
 
         // How's it going? (User-reported developer state)
@@ -645,7 +660,8 @@ private fun RecoveryClockContent(
     nextObjective: String,
     remainingSeconds: Long,
     progressRatio: Float,
-    onEndRecoveryEarly: () -> Unit
+    onEndRecoveryEarly: () -> Unit,
+    onFastForward: () -> Unit = {}
 ) {
     val minutes = remainingSeconds / 60
     val seconds = remainingSeconds % 60
@@ -706,6 +722,15 @@ private fun RecoveryClockContent(
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
+
+        // Fast-Forward Break Prototype Control (Debug/Demo only)
+        item {
+            PrototypeFastForwardButton(
+                label = "⚡ FAST FORWARD BREAK",
+                sublabel = "Demo only",
+                onClick = onFastForward
+            )
         }
 
         // Next Objective Preview (DevPulse remembers!)
@@ -1089,3 +1114,51 @@ private fun SessionFinishedContent(
         }
     }
 }
+
+/**
+ * Clearly identifiable prototype/development control for demo and validation flows.
+ * Rendered strictly in DEBUG builds.
+ */
+@Composable
+private fun PrototypeFastForwardButton(
+    label: String,
+    sublabel: String = "Demo only",
+    onClick: () -> Unit
+) {
+    if (!BuildConfig.DEBUG) return
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0x1AF59E0B),
+        border = BorderStroke(1.dp, Color(0x66F59E0B))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = label,
+                color = Color(0xFFF59E0B),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0x33F59E0B)
+            ) {
+                Text(
+                    text = sublabel,
+                    color = Color(0xFFFBBF24),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                )
+            }
+        }
+    }
+}
+

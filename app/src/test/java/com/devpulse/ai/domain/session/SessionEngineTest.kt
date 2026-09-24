@@ -47,7 +47,8 @@ class SessionEngineTest {
             handoffDao = handoffDao,
             improvementDao = improvementDao,
             timeProvider = testTime,
-            scope = testScope
+            scope = testScope,
+            autoStartTicker = false
         )
     }
 
@@ -407,7 +408,8 @@ class SessionEngineTest {
             handoffDao = handoffDao,
             improvementDao = improvementDao,
             timeProvider = testTime,
-            scope = testScope
+            scope = testScope,
+            autoStartTicker = false
         )
         restoredEngine.restoreActiveSession()
         advanceUntilIdle()
@@ -523,6 +525,157 @@ class SessionEngineTest {
         // -> IDLE
         engine.resetToIdle()
         assertTrue(engine.state.value is SessionEngineState.Idle)
+    }
+
+    // 15. Fast-forwarding a work block transitions to handoff and persists
+    @Test
+    fun `test 15 - Fast forwarding a work block transitions to handoff and persists`() = testScope.runTest {
+        engine.startDeepWorkSession(
+            activityType = SessionActivityType.CODING,
+            overallGoal = "Finish graph problems",
+            initialObjective = "Solve problem A",
+            initialMindset = DeveloperState.READY,
+            totalPlannedHours = 3,
+            workDurationMinutes = 45,
+            recoveryDurationMinutes = 15
+        )
+        advanceUntilIdle()
+        assertTrue(engine.state.value is SessionEngineState.Working)
+
+        // Fast forward work block
+        engine.fastForwardCurrentBlock()
+        advanceUntilIdle()
+
+        val state = engine.state.value
+        assertTrue("Expected WorkBlockHandoff but was $state", state is SessionEngineState.WorkBlockHandoff)
+        val handoffState = state as SessionEngineState.WorkBlockHandoff
+        assertEquals("Solve problem A", handoffState.completedBlock.objective)
+        assertEquals(BlockStatus.COMPLETED, handoffState.completedBlock.status)
+
+        // Verify block completion persisted in DAO
+        val blockInDb = blockDao.getBlockById(handoffState.completedBlock.id)
+        assertNotNull(blockInDb)
+        assertEquals(BlockStatus.COMPLETED.name, blockInDb?.status)
+    }
+
+    // 16. Fast-forwarding recovery transitions to next block with objective continuity
+    @Test
+    fun `test 16 - Fast forwarding recovery transitions to next block with objective continuity`() = testScope.runTest {
+        engine.startDeepWorkSession(
+            activityType = SessionActivityType.CODING,
+            overallGoal = "Finish graph problems",
+            initialObjective = "Solve problem A",
+            initialMindset = DeveloperState.READY,
+            totalPlannedHours = 3,
+            workDurationMinutes = 45,
+            recoveryDurationMinutes = 15
+        )
+        advanceUntilIdle()
+
+        // Fast forward work block -> Handoff
+        engine.fastForwardCurrentBlock()
+        advanceUntilIdle()
+
+        // Submit handoff
+        engine.submitWorkBlockHandoff(
+            accomplished = "Solved the BFS problem",
+            nextObjective = "Need to solve the DFS problem"
+        )
+        advanceUntilIdle()
+
+        // State is Recovery
+        val recoveryState = engine.state.value
+        assertTrue("Expected Recovery state but was $recoveryState", recoveryState is SessionEngineState.Recovery)
+        val recovery = recoveryState as SessionEngineState.Recovery
+        assertEquals("Need to solve the DFS problem", recovery.nextObjective)
+
+        // Fast forward break
+        engine.fastForwardCurrentBlock()
+        advanceUntilIdle()
+
+        // State is ReadyForNextBlock with objective carried over
+        val readyState = engine.state.value
+        assertTrue("Expected ReadyForNextBlock but was $readyState", readyState is SessionEngineState.ReadyForNextBlock)
+        val ready = readyState as SessionEngineState.ReadyForNextBlock
+        assertEquals("Need to solve the DFS problem", ready.carryoverObjective)
+
+        // Continue into next work block
+        engine.continueNextBlock()
+        advanceUntilIdle()
+
+        val workingState = engine.state.value
+        assertTrue("Expected Working state but was $workingState", workingState is SessionEngineState.Working)
+        val working = workingState as SessionEngineState.Working
+        assertEquals(1, working.session.currentBlockIndex)
+        assertEquals("Need to solve the DFS problem", working.currentBlock.objective)
+    }
+
+    // 17. Fast-forward works through multiple blocks to final completion
+    @Test
+    fun `test 17 - Fast forward works through multiple blocks to final completion`() = testScope.runTest {
+        engine.startDeepWorkSession(
+            activityType = SessionActivityType.CODING,
+            overallGoal = "Build 2 Block Deep Work",
+            initialObjective = "Block 0",
+            initialMindset = DeveloperState.READY,
+            totalPlannedHours = 2,
+            workDurationMinutes = 50,
+            recoveryDurationMinutes = 10
+        )
+        advanceUntilIdle()
+
+        // Block 0 Fast Forward
+        engine.fastForwardCurrentBlock()
+        advanceUntilIdle()
+        engine.submitWorkBlockHandoff("Accomplished 0", "Block 1 Obj")
+        advanceUntilIdle()
+
+        // Recovery Fast Forward
+        engine.fastForwardCurrentBlock()
+        advanceUntilIdle()
+
+        // Continue to Block 1 (final block of 2)
+        engine.continueNextBlock()
+        advanceUntilIdle()
+
+        // Block 1 Fast Forward
+        engine.fastForwardCurrentBlock()
+        advanceUntilIdle()
+
+        val finalHandoffState = engine.state.value as SessionEngineState.WorkBlockHandoff
+        assertTrue("Block 1 should be recognized as final block", finalHandoffState.isFinalBlock)
+
+        engine.submitWorkBlockHandoff("Accomplished Block 1", "Session Complete")
+        advanceUntilIdle()
+
+        val reflectionState = engine.state.value
+        assertTrue("Expected SessionCompleteReflection after final block", reflectionState is SessionEngineState.SessionCompleteReflection)
+    }
+
+    // 18. Fast-forward works while paused without corrupting state
+    @Test
+    fun `test 18 - Fast forward works while paused without corrupting state`() = testScope.runTest {
+        engine.startFocusSession(
+            activityType = SessionActivityType.DEBUGGING,
+            overallGoal = "Pause and FF",
+            initialMindset = DeveloperState.READY,
+            durationMinutes = 20
+        )
+        advanceUntilIdle()
+
+        testTime.advanceSeconds(300)
+        engine.pause()
+        advanceUntilIdle()
+        assertTrue(engine.state.value is SessionEngineState.Paused)
+
+        // Fast forward while paused
+        engine.fastForwardCurrentBlock()
+        advanceUntilIdle()
+
+        val handoffState = engine.state.value
+        assertTrue(handoffState is SessionEngineState.WorkBlockHandoff)
+        val handoff = handoffState as SessionEngineState.WorkBlockHandoff
+        assertEquals(BlockStatus.COMPLETED, handoff.completedBlock.status)
     }
 }
 

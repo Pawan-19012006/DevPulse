@@ -29,7 +29,8 @@ class SessionEngine(
     private val handoffDao: SessionHandoffDao,
     private val improvementDao: OnePercentImprovementDao,
     private val timeProvider: TimeProvider = SystemTimeProvider,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + Job())
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + Job()),
+    private val autoStartTicker: Boolean = true
 ) {
     constructor(
         database: DevPulseDatabase = DevPulseApp.instance.database,
@@ -41,7 +42,8 @@ class SessionEngine(
         handoffDao = database.sessionHandoffDao(),
         improvementDao = database.onePercentImprovementDao(),
         timeProvider = timeProvider,
-        scope = scope
+        scope = scope,
+        autoStartTicker = true
     )
 
     private val _state = MutableStateFlow<SessionEngineState>(SessionEngineState.Idle)
@@ -513,10 +515,81 @@ class SessionEngine(
      */
     private fun startTicker() {
         stopTicker()
+        if (!autoStartTicker) return
         tickerJob = scope.launch {
             while (isActive) {
                 delay(1000L)
                 tick()
+            }
+        }
+    }
+
+    /**
+     * Fast-forwards the current timed interval (Work block, Paused block, or Recovery)
+     * to simulated completion. This is a prototype accelerator used for testing and demonstrating
+     * the Deep Work session engine without waiting for 45/15 minutes.
+     */
+    fun fastForwardCurrentBlock() {
+        val now = timeProvider.now()
+        when (val current = _state.value) {
+            is SessionEngineState.Working -> {
+                stopTicker()
+                val block = current.currentBlock
+                val simulatedCompletion = now
+                scope.launch(Dispatchers.IO) {
+                    blockDao.updateBlockState(
+                        id = block.id,
+                        pausedAt = null,
+                        totalPausedDurationMs = block.totalPausedDurationMs,
+                        status = BlockStatus.COMPLETED.name,
+                        completedAt = simulatedCompletion
+                    )
+                }
+                val isFinal = current.session.sessionMode == SessionMode.FOCUS ||
+                        (current.session.currentBlockIndex >= current.session.totalBlocks - 1)
+
+                _state.value = SessionEngineState.WorkBlockHandoff(
+                    session = current.session,
+                    completedBlock = block.copy(
+                        status = BlockStatus.COMPLETED,
+                        completedAt = simulatedCompletion
+                    ),
+                    isFinalBlock = isFinal
+                )
+            }
+            is SessionEngineState.Paused -> {
+                stopTicker()
+                val block = current.currentBlock
+                val activePause = if (block.pausedAt != null) (now - block.pausedAt).coerceAtLeast(0L) else 0L
+                val totalPause = block.totalPausedDurationMs + activePause
+                scope.launch(Dispatchers.IO) {
+                    blockDao.updateBlockState(
+                        id = block.id,
+                        pausedAt = null,
+                        totalPausedDurationMs = totalPause,
+                        status = BlockStatus.COMPLETED.name,
+                        completedAt = now
+                    )
+                }
+                val isFinal = current.session.sessionMode == SessionMode.FOCUS ||
+                        (current.session.currentBlockIndex >= current.session.totalBlocks - 1)
+
+                _state.value = SessionEngineState.WorkBlockHandoff(
+                    session = current.session,
+                    completedBlock = block.copy(
+                        status = BlockStatus.COMPLETED,
+                        totalPausedDurationMs = totalPause,
+                        pausedAt = null,
+                        completedAt = now
+                    ),
+                    isFinalBlock = isFinal
+                )
+            }
+            is SessionEngineState.Recovery -> {
+                endRecoveryEarly()
+            }
+            else -> {
+                // Not in a timed state
             }
         }
     }

@@ -180,6 +180,10 @@ class SessionViewModel(
         sessionEngine.endRecoveryEarly()
     }
 
+    fun fastForwardCurrentBlock() {
+        sessionEngine.fastForwardCurrentBlock()
+    }
+
     fun continueNextBlock(customObjective: String? = null) {
         viewModelScope.launch {
             sessionEngine.continueNextBlock(customObjective)
