@@ -1,74 +1,30 @@
 package com.devpulse.ai.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devpulse.ai.domain.session.DeveloperState
-import com.devpulse.ai.domain.session.ImprovementCategory
-import com.devpulse.ai.domain.session.SessionActivityType
-import com.devpulse.ai.ui.theme.BackgroundDark
-import com.devpulse.ai.ui.theme.BorderDark
-import com.devpulse.ai.ui.theme.Primary
-import com.devpulse.ai.ui.theme.Secondary
-import com.devpulse.ai.ui.theme.SurfaceDark
-import com.devpulse.ai.ui.theme.SurfaceVariantDark
-import com.devpulse.ai.ui.theme.TextPrimaryDark
-import com.devpulse.ai.ui.theme.TextSecondaryDark
+import com.devpulse.ai.data.local.entity.PreSessionChecklistItemEntity
+import com.devpulse.ai.data.local.entity.SessionHandoffEntity
+import com.devpulse.ai.domain.session.*
+import com.devpulse.ai.ui.theme.*
 import com.devpulse.ai.viewmodel.SessionViewModel
 import kotlinx.coroutines.launch
 
@@ -77,23 +33,23 @@ import kotlinx.coroutines.launch
 fun SessionSetupScreen(
     viewModel: SessionViewModel,
     onNavigateBack: () -> Unit,
-    onSessionStarted: () -> Unit
+    onSessionStarted: (sessionId: String) -> Unit
 ) {
+    val sessionMode by viewModel.sessionMode.collectAsState()
     val selectedActivity by viewModel.selectedActivity.collectAsState()
     val selectedDuration by viewModel.selectedDurationMinutes.collectAsState()
+    val deepWorkPreset by viewModel.deepWorkPreset.collectAsState()
     val selectedState by viewModel.selectedState.collectAsState()
     val goal by viewModel.goal.collectAsState()
+    val currentBlockObjective by viewModel.currentBlockObjective.collectAsState()
     val checklistItems by viewModel.checklistItems.collectAsState()
     val checkedItemIds by viewModel.checkedItemIds.collectAsState()
+    val latestHandoff by viewModel.latestUnfinishedHandoff.collectAsState()
+    val ignoredHandoffId by viewModel.ignoredHandoffId.collectAsState()
 
-    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showAddChecklistDialog by remember { mutableStateOf(false) }
     var newChecklistText by remember { mutableStateOf("") }
-    var showSessionCompleteDialog by remember { mutableStateOf(false) }
-    var reflectionText by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(ImprovementCategory.SKILL) }
-    var activeSessionId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         containerColor = BackgroundDark,
@@ -101,7 +57,7 @@ fun SessionSetupScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Prepare Session",
+                        text = "Prepare Dev Session",
                         color = TextPrimaryDark,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -110,15 +66,13 @@ fun SessionSetupScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = TextPrimaryDark
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BackgroundDark
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundDark)
             )
         }
     ) { paddingValues ->
@@ -130,6 +84,25 @@ fun SessionSetupScreen(
             contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
+            // Unfinished Session Handoff Continuity Card
+            if (latestHandoff != null && latestHandoff?.id != ignoredHandoffId) {
+                item {
+                    SessionContinuityCard(
+                        handoff = latestHandoff!!,
+                        onContinue = { viewModel.applyHandoff(latestHandoff!!) },
+                        onDismiss = { viewModel.dismissHandoff(latestHandoff!!.id) }
+                    )
+                }
+            }
+
+            // Session Mode Selector: Focus Session vs Deep Work
+            item {
+                SessionModeSelector(
+                    currentMode = sessionMode,
+                    onSelectMode = { viewModel.selectSessionMode(it) }
+                )
+            }
+
             // Activity Selection
             item {
                 ActivitySelectionSection(
@@ -138,23 +111,44 @@ fun SessionSetupScreen(
                 )
             }
 
-            // Duration Selector
+            // Duration / Deep Work Preset Selection
             item {
-                DurationSelectionSection(
-                    selectedDuration = selectedDuration,
-                    onSelectDuration = { viewModel.selectDuration(it) }
-                )
+                if (sessionMode == SessionMode.FOCUS) {
+                    FocusDurationSection(
+                        selectedDuration = selectedDuration,
+                        onSelectDuration = { viewModel.selectDuration(it) }
+                    )
+                } else {
+                    DeepWorkPresetSection(
+                        selectedPreset = deepWorkPreset,
+                        onSelectPreset = { viewModel.selectDeepWorkPreset(it) }
+                    )
+                }
             }
 
-            // Goal Input
+            // Level 1: Overall Goal
             item {
                 GoalInputSection(
+                    label = if (sessionMode == SessionMode.FOCUS) "SESSION GOAL" else "LEVEL 1: OVERALL SESSION GOAL",
+                    placeholder = if (sessionMode == SessionMode.FOCUS) "What ONE thing will you achieve?" else "Big goal for this deep work (e.g. Build GitHub sync)",
                     goal = goal,
                     onGoalChange = { viewModel.updateGoal(it) }
                 )
             }
 
-            // Initial Developer State
+            // Level 2: Current Block Objective (for Deep Work)
+            if (sessionMode == SessionMode.DEEP_WORK) {
+                item {
+                    GoalInputSection(
+                        label = "LEVEL 2: BLOCK 1 OBJECTIVE",
+                        placeholder = "Immediate objective for Block 1 (e.g. Implement repository fetching)",
+                        goal = currentBlockObjective,
+                        onGoalChange = { viewModel.updateBlockObjective(it) }
+                    )
+                }
+            }
+
+            // Pre-Session Mindset
             item {
                 PreSessionStateSection(
                     selectedState = selectedState,
@@ -177,19 +171,15 @@ fun SessionSetupScreen(
                 Button(
                     onClick = {
                         coroutineScope.launch {
-                            val id = viewModel.createAndStartSession()
-                            activeSessionId = id
-                            showSessionCompleteDialog = true
+                            val sessionId = viewModel.startConfiguredSession()
+                            onSessionStarted(sessionId)
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(54.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Primary,
-                        contentColor = BackgroundDark
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = BackgroundDark)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
@@ -198,7 +188,11 @@ fun SessionSetupScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Begin Focus Session (${selectedDuration}m)",
+                        text = if (sessionMode == SessionMode.FOCUS) {
+                            "Begin Focus Session (${selectedDuration}m)"
+                        } else {
+                            "Begin Deep Work (${deepWorkPreset.label})"
+                        },
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
@@ -214,7 +208,7 @@ fun SessionSetupScreen(
             containerColor = SurfaceDark,
             title = {
                 Text(
-                    text = "Add Checklist Item",
+                    text = "Add Environment Item",
                     color = TextPrimaryDark,
                     fontWeight = FontWeight.Bold
                 )
@@ -253,104 +247,109 @@ fun SessionSetupScreen(
             }
         )
     }
+}
 
-    // Phase 0 Session Completion & 1% Better Capture Modal
-    if (showSessionCompleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showSessionCompleteDialog = false },
-            containerColor = SurfaceDark,
-            title = {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "🌱", fontSize = 20.sp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Session Complete",
-                            color = Color(0xFF10B981),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "You showed up.",
-                        color = TextPrimaryDark,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "What made you 1% better this session?",
-                        color = TextSecondaryDark,
-                        fontSize = 13.sp
-                    )
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Select what you gained:",
-                        color = TextSecondaryDark,
-                        fontSize = 12.sp
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(ImprovementCategory.values()) { category ->
-                            val isSelected = category == selectedCategory
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) SurfaceVariantDark else BackgroundDark)
-                                    .border(1.dp, if (isSelected) Primary else BorderDark, RoundedCornerShape(12.dp))
-                                    .clickable { selectedCategory = category }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = category.prefixBadge,
-                                    color = if (isSelected) Color(0xFF10B981) else TextSecondaryDark,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = reflectionText,
-                        onValueChange = { reflectionText = it },
-                        placeholder = { Text("e.g. Understood coroutine dispatchers", color = TextSecondaryDark) },
-                        maxLines = 3,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextPrimaryDark,
-                            unfocusedTextColor = TextPrimaryDark,
-                            focusedBorderColor = Primary,
-                            unfocusedBorderColor = BorderDark
-                        )
-                    )
-                }
-            },
-            confirmButton = {
+@Composable
+private fun SessionContinuityCard(
+    handoff: SessionHandoffEntity,
+    onContinue: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+        border = CardDefaults.outlinedCardBorder().copy(width = 1.dp, brush = Brush.linearGradient(listOf(Secondary, Primary)))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "LAST SESSION HANDOFF",
+                    color = Secondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "DevPulse remembers",
+                    color = Color(0xFF10B981),
+                    fontSize = 11.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "You were working on: \"${handoff.sessionGoal}\"",
+                color = TextSecondaryDark,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Unfinished: \"${handoff.nextObjective}\"",
+                color = TextPrimaryDark,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
-                    onClick = {
-                        val text = reflectionText.ifBlank { "Focused ${selectedActivity.displayName} session." }
-                        viewModel.recordImprovement(selectedCategory, text)
-                        Toast.makeText(context, "🌱 +1% Better recorded!", Toast.LENGTH_SHORT).show()
-                        showSessionCompleteDialog = false
-                        onSessionStarted()
-                    },
+                    onClick = onContinue,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = BackgroundDark)
                 ) {
-                    Text("Save 1% Improvement", fontWeight = FontWeight.Bold)
+                    Text("Continue This", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showSessionCompleteDialog = false
-                    onSessionStarted()
-                }) {
-                    Text("Skip Reflection", color = TextSecondaryDark)
+                OutlinedButton(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Start Fresh", color = TextSecondaryDark, fontSize = 13.sp)
                 }
             }
-        )
+        }
+    }
+}
+
+@Composable
+private fun SessionModeSelector(
+    currentMode: SessionMode,
+    onSelectMode: (SessionMode) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SurfaceDark)
+            .border(1.dp, BorderDark, RoundedCornerShape(14.dp))
+            .padding(4.dp)
+    ) {
+        SessionMode.values().forEach { mode ->
+            val isSelected = mode == currentMode
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isSelected) SurfaceVariantDark else Color.Transparent)
+                    .clickable { onSelectMode(mode) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = mode.displayName,
+                    color = if (isSelected) TextPrimaryDark else TextSecondaryDark,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 13.sp
+                )
+            }
+        }
     }
 }
 
@@ -401,14 +400,12 @@ private fun ActivitySelectionSection(
                             ) {
                                 Text(text = activity.icon, fontSize = 20.sp)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = activity.displayName,
-                                        color = if (isSelected) TextPrimaryDark else TextSecondaryDark,
-                                        fontSize = 13.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                    )
-                                }
+                                Text(
+                                    text = activity.displayName,
+                                    color = if (isSelected) TextPrimaryDark else TextSecondaryDark,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
                             }
                         }
                     }
@@ -422,7 +419,7 @@ private fun ActivitySelectionSection(
 }
 
 @Composable
-private fun DurationSelectionSection(
+private fun FocusDurationSection(
     selectedDuration: Int,
     onSelectDuration: (Int) -> Unit
 ) {
@@ -466,13 +463,77 @@ private fun DurationSelectionSection(
 }
 
 @Composable
+private fun DeepWorkPresetSection(
+    selectedPreset: DeepWorkPreset,
+    onSelectPreset: (DeepWorkPreset) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "DEEP WORK PRESETS",
+            color = TextSecondaryDark,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            DeepWorkPresets.ALL.forEach { preset ->
+                val isSelected = preset == selectedPreset
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onSelectPreset(preset) },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) SurfaceVariantDark else SurfaceDark
+                    ),
+                    border = CardDefaults.outlinedCardBorder().copy(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            if (isSelected) listOf(Primary, Secondary) else listOf(BorderDark, BorderDark)
+                        )
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = preset.label,
+                            color = TextPrimaryDark,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${preset.numberOfBlocks}x ${preset.workMinutes}m work\n${preset.recoveryMinutes}m breaks",
+                            color = TextSecondaryDark,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun GoalInputSection(
+    label: String,
+    placeholder: String,
     goal: String,
     onGoalChange: (String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "SESSION GOAL (OPTIONAL)",
+            text = label,
             color = TextSecondaryDark,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -483,7 +544,7 @@ private fun GoalInputSection(
         OutlinedTextField(
             value = goal,
             onValueChange = onGoalChange,
-            placeholder = { Text("What ONE thing will you achieve?", color = TextSecondaryDark, fontSize = 13.sp) },
+            placeholder = { Text(placeholder, color = TextSecondaryDark, fontSize = 13.sp) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -514,7 +575,7 @@ private fun PreSessionStateSection(
             modifier = Modifier.padding(bottom = 10.dp)
         )
 
-        val preOptions = listOf(DeveloperState.READY, DeveloperState.LOW_ENERGY, DeveloperState.MENTALLY_TIRED)
+        val preOptions = listOf(DeveloperState.READY, DeveloperState.GOOD, DeveloperState.TIRED)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -549,7 +610,7 @@ private fun PreSessionStateSection(
 
 @Composable
 private fun PreSessionChecklistSection(
-    items: List<com.devpulse.ai.data.local.entity.PreSessionChecklistItemEntity>,
+    items: List<PreSessionChecklistItemEntity>,
     checkedIds: Set<String>,
     onToggleCheck: (String) -> Unit,
     onAddCustomClick: () -> Unit

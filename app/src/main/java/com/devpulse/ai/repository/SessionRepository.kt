@@ -6,6 +6,7 @@ import com.devpulse.ai.data.local.entity.DevSessionEntity
 import com.devpulse.ai.data.local.entity.OnePercentImprovementEntity
 import com.devpulse.ai.data.local.entity.PreSessionChecklistItemEntity
 import com.devpulse.ai.data.local.entity.RecoveryActivityEntity
+import com.devpulse.ai.data.local.entity.SessionHandoffEntity
 import com.devpulse.ai.domain.session.DeveloperState
 import com.devpulse.ai.domain.session.ImprovementCategory
 import com.devpulse.ai.domain.session.SessionActivityType
@@ -20,9 +21,20 @@ class SessionRepository(
     private val database: DevPulseDatabase = DevPulseApp.instance.database
 ) {
     private val sessionDao = database.devSessionDao()
+    private val blockDao = database.sessionBlockDao()
+    private val handoffDao = database.sessionHandoffDao()
     private val improvementDao = database.onePercentImprovementDao()
     private val checklistDao = database.preSessionChecklistDao()
     private val recoveryDao = database.recoveryActivityDao()
+
+    fun observeActiveSession(): Flow<DevSessionEntity?> = sessionDao.observeActiveSession()
+
+    fun observeLatestUnfinishedHandoff(): Flow<SessionHandoffEntity?> =
+        handoffDao.observeLatestUnfinishedHandoff()
+
+    suspend fun getLatestUnfinishedHandoff(): SessionHandoffEntity? = withContext(Dispatchers.IO) {
+        handoffDao.getLatestUnfinishedHandoff()
+    }
 
     fun observeAllSessions(): Flow<List<DevSessionEntity>> = sessionDao.observeAllSessions()
 

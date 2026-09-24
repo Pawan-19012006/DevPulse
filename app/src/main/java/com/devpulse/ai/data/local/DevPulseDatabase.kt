@@ -15,11 +15,13 @@ import com.devpulse.ai.data.local.entity.*
         ActivitySnapshotEntity::class,
         SkillEvidenceEntity::class,
         DevSessionEntity::class,
+        SessionBlockEntity::class,
+        SessionHandoffEntity::class,
         OnePercentImprovementEntity::class,
         PreSessionChecklistItemEntity::class,
         RecoveryActivityEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class DevPulseDatabase : RoomDatabase() {
@@ -30,6 +32,8 @@ abstract class DevPulseDatabase : RoomDatabase() {
     abstract fun activitySnapshotDao(): ActivitySnapshotDao
     abstract fun skillEvidenceDao(): SkillEvidenceDao
     abstract fun devSessionDao(): DevSessionDao
+    abstract fun sessionBlockDao(): SessionBlockDao
+    abstract fun sessionHandoffDao(): SessionHandoffDao
     abstract fun onePercentImprovementDao(): OnePercentImprovementDao
     abstract fun preSessionChecklistDao(): PreSessionChecklistDao
     abstract fun recoveryActivityDao(): RecoveryActivityDao

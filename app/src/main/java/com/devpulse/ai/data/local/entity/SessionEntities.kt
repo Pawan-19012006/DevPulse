@@ -20,9 +20,57 @@ data class DevSessionEntity(
     val actualDurationMinutes: Int = 0,
     val initialState: String? = null,
     val finalState: String? = null,
-    val status: String = "COMPLETED",
+    val status: String = "IN_PROGRESS",
     val startedAt: Long,
-    val completedAt: Long? = null
+    val completedAt: Long? = null,
+    // Phase 2 additions:
+    val sessionMode: String = "FOCUS", // "FOCUS" or "DEEP_WORK"
+    val currentObjective: String = goal ?: "Focused Work",
+    val workBlockDurationMinutes: Int = 25,
+    val recoveryBlockDurationMinutes: Int = 5,
+    val totalBlocks: Int = 1,
+    val currentBlockIndex: Int = 0,
+    val currentMindset: String? = initialState
+)
+
+@Entity(
+    tableName = "session_blocks",
+    indices = [
+        Index(value = ["sessionId"]),
+        Index(value = ["status"])
+    ]
+)
+data class SessionBlockEntity(
+    @PrimaryKey val id: String,
+    val sessionId: String,
+    val blockIndex: Int,
+    val blockType: String, // "WORK" or "RECOVERY"
+    val objective: String,
+    val plannedDurationSeconds: Long,
+    val startedAt: Long,
+    val pausedAt: Long? = null,
+    val totalPausedDurationMs: Long = 0L,
+    val completedAt: Long? = null,
+    val status: String = "WORKING" // "WORKING", "PAUSED", "COMPLETED"
+)
+
+@Entity(
+    tableName = "session_handoffs",
+    indices = [
+        Index(value = ["sessionId"]),
+        Index(value = ["isUnfinished"]),
+        Index(value = ["createdAt"])
+    ]
+)
+data class SessionHandoffEntity(
+    @PrimaryKey val id: String,
+    val sessionId: String,
+    val blockIndex: Int,
+    val sessionGoal: String,
+    val accomplished: String,
+    val nextObjective: String,
+    val isUnfinished: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 @Entity(

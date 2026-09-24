@@ -62,11 +62,14 @@ import com.devpulse.ai.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.devpulse.ai.domain.session.SessionEngineState
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
+    activeSessionState: SessionEngineState = SessionEngineState.Idle,
     onNavigateToSessionSetup: () -> Unit,
+    onNavigateToActiveSession: (String) -> Unit = {},
     onNavigateToJourney: () -> Unit,
     onNavigateToGitHubContext: (String?) -> Unit
 ) {
@@ -81,6 +84,16 @@ fun HomeScreen(
     val greetingTitle = viewModel.getGreetingTitle()
     val greetingSubtitle = viewModel.getGreetingSubtitle()
 
+    val activeSessionId = when (activeSessionState) {
+        is SessionEngineState.Working -> activeSessionState.session.id
+        is SessionEngineState.Paused -> activeSessionState.session.id
+        is SessionEngineState.WorkBlockHandoff -> activeSessionState.session.id
+        is SessionEngineState.Recovery -> activeSessionState.session.id
+        is SessionEngineState.ReadyForNextBlock -> activeSessionState.session.id
+        is SessionEngineState.SessionCompleteReflection -> activeSessionState.session.id
+        else -> null
+    }
+
     Scaffold(
         containerColor = BackgroundDark
     ) { paddingValues ->
@@ -92,6 +105,16 @@ fun HomeScreen(
             contentPadding = PaddingValues(top = 26.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
+            // 0. Active Session in Progress Banner (if active)
+            if (activeSessionId != null) {
+                item {
+                    ActiveSessionBannerCard(
+                        state = activeSessionState,
+                        onResume = { onNavigateToActiveSession(activeSessionId) }
+                    )
+                }
+            }
+
             // 1. Emotional Greeting & Human Presence
             item {
                 DeveloperGreetingSection(
@@ -754,3 +777,103 @@ private fun DeveloperContextFooter(
         }
     }
 }
+
+@Composable
+private fun ActiveSessionBannerCard(
+    state: SessionEngineState,
+    onResume: () -> Unit
+) {
+    val (label, detail, isPaused) = when (state) {
+        is SessionEngineState.Working -> Triple(
+            "⚡ ACTIVE SESSION IN PROGRESS",
+            "${state.block.blockType.name.lowercase().replaceFirstChar { it.uppercase() }} Block #${state.session.currentBlockIndex + 1}: ${state.block.objective}",
+            false
+        )
+        is SessionEngineState.Paused -> Triple(
+            "⏸️ SESSION PAUSED",
+            "Objective: ${state.block.objective}",
+            true
+        )
+        is SessionEngineState.WorkBlockHandoff -> Triple(
+            "📝 WORK BLOCK HANDOFF READY",
+            "Capture what you accomplished & what remains",
+            false
+        )
+        is SessionEngineState.Recovery -> Triple(
+            "🌱 RECOVERY IN PROGRESS",
+            "Next: ${state.session.currentObjective}",
+            false
+        )
+        is SessionEngineState.ReadyForNextBlock -> Triple(
+            "🎯 READY FOR NEXT BLOCK",
+            "Next objective: ${state.session.currentObjective}",
+            false
+        )
+        is SessionEngineState.SessionCompleteReflection -> Triple(
+            "🎉 SESSION COMPLETE",
+            "Capture your +1% Better reflection",
+            false
+        )
+        else -> Triple("ACTIVE SESSION", "", false)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onResume() },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+        border = CardDefaults.outlinedCardBorder().copy(
+            width = 1.5.dp,
+            brush = Brush.horizontalGradient(
+                listOf(
+                    if (isPaused) Color(0xFFF59E0B) else Primary,
+                    Secondary
+                )
+            )
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = if (isPaused) Color(0xFFF59E0B) else Primary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = detail,
+                    color = TextPrimaryDark,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Button(
+                onClick = onResume,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isPaused) Color(0xFFF59E0B) else Primary
+                ),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = if (isPaused) "Resume" else "Open",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+

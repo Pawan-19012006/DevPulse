@@ -17,12 +17,18 @@ import com.devpulse.ai.viewmodel.LoginViewModel
 import com.devpulse.ai.viewmodel.ProfileViewModel
 import com.devpulse.ai.viewmodel.SessionViewModel
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.devpulse.ai.screens.ActiveSessionScreen
+
 @Composable
 fun NavGraph(navController: NavHostController) {
     // Shared ViewModel for GitHub telemetry & developer context
     val profileViewModel: ProfileViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel()
     val sessionViewModel: SessionViewModel = viewModel()
+
+    val activeSessionState by sessionViewModel.engineState.collectAsState()
 
     NavHost(
         navController = navController,
@@ -32,6 +38,7 @@ fun NavGraph(navController: NavHostController) {
         composable(Screen.Home.route) {
             HomeScreen(
                 viewModel = homeViewModel,
+                activeSessionState = activeSessionState,
                 onNavigateToSessionSetup = {
                     val intention = homeViewModel.currentIntention.value
                     if (intention.isNotBlank()) {
@@ -39,6 +46,9 @@ fun NavGraph(navController: NavHostController) {
                     }
                     sessionViewModel.selectState(homeViewModel.currentState.value)
                     navController.navigate(Screen.SessionSetup.route)
+                },
+                onNavigateToActiveSession = { sessionId ->
+                    navController.navigate(Screen.ActiveSession.createRoute(sessionId))
                 },
                 onNavigateToJourney = {
                     navController.navigate(Screen.Journey.route)
@@ -60,8 +70,29 @@ fun NavGraph(navController: NavHostController) {
                 onNavigateBack = {
                     navController.popBackStack()
                 },
-                onSessionStarted = {
-                    navController.popBackStack()
+                onSessionStarted = { sessionId ->
+                    navController.navigate(Screen.ActiveSession.createRoute(sessionId)) {
+                        popUpTo(Screen.Home.route)
+                    }
+                }
+            )
+        }
+
+        // Active Session Engine & Real Running Clock
+        composable(
+            route = Screen.ActiveSession.route,
+            arguments = listOf(
+                navArgument("sessionId") {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+            ActiveSessionScreen(
+                sessionId = sessionId,
+                viewModel = sessionViewModel,
+                onNavigateHome = {
+                    navController.popBackStack(Screen.Home.route, false)
                 }
             )
         }
