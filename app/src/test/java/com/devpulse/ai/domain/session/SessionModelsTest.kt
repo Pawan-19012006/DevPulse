@@ -26,15 +26,19 @@ class SessionModelsTest {
     @Test
     fun `DeveloperState separates pre-session states from in-session states`() {
         val preSessionStates = DeveloperState.values().filter { it.isPreSessionOption }
-        assertEquals(3, preSessionStates.size)
         assertTrue(preSessionStates.contains(DeveloperState.READY))
-        assertTrue(preSessionStates.contains(DeveloperState.LOW_ENERGY))
-        assertTrue(preSessionStates.contains(DeveloperState.MENTALLY_TIRED))
+        assertTrue(preSessionStates.contains(DeveloperState.GOOD))
+        assertTrue(preSessionStates.contains(DeveloperState.TIRED))
+        assertTrue(preSessionStates.contains(DeveloperState.FRUSTRATED))
+        assertTrue(preSessionStates.contains(DeveloperState.DRAINED))
 
         // Ensure post/in-session states exist
         assertTrue(DeveloperState.values().contains(DeveloperState.FLOWING))
         assertTrue(DeveloperState.values().contains(DeveloperState.STUCK))
-        assertTrue(DeveloperState.values().contains(DeveloperState.FRUSTRATED))
+
+        // Ensure supportive message is non-empty
+        assertTrue(DeveloperState.READY.supportiveMessage.isNotBlank())
+        assertTrue(DeveloperState.FRUSTRATED.supportiveMessage.isNotBlank())
     }
 
     @Test

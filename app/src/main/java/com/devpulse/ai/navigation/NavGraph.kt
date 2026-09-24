@@ -33,6 +33,11 @@ fun NavGraph(navController: NavHostController) {
             HomeScreen(
                 viewModel = homeViewModel,
                 onNavigateToSessionSetup = {
+                    val intention = homeViewModel.currentIntention.value
+                    if (intention.isNotBlank()) {
+                        sessionViewModel.updateGoal(intention)
+                    }
+                    sessionViewModel.selectState(homeViewModel.currentState.value)
                     navController.navigate(Screen.SessionSetup.route)
                 },
                 onNavigateToJourney = {

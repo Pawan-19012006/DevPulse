@@ -261,25 +261,34 @@ fun SessionSetupScreen(
             containerColor = SurfaceDark,
             title = {
                 Column {
-                    Text(
-                        text = "🌱 Session Complete",
-                        color = Color(0xFF10B981),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "🌱", fontSize = 20.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Session Complete",
+                            color = Color(0xFF10B981),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "What made you 1% better this session?",
+                        text = "You showed up.",
                         color = TextPrimaryDark,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "What made you 1% better this session?",
+                        color = TextSecondaryDark,
+                        fontSize = 13.sp
                     )
                 }
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Select an improvement category:",
+                        text = "Select what you gained:",
                         color = TextSecondaryDark,
                         fontSize = 12.sp
                     )
@@ -551,13 +560,20 @@ private fun PreSessionChecklistSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "PRE-SESSION RITUAL",
-                color = TextSecondaryDark,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
+            Column {
+                Text(
+                    text = "PREPARE YOUR ENVIRONMENT",
+                    color = TextSecondaryDark,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Give yourself a clean space to build.",
+                    color = TextSecondaryDark,
+                    fontSize = 12.sp
+                )
+            }
             Text(
                 text = "+ Add Item",
                 color = Primary,

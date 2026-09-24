@@ -142,7 +142,7 @@ fun JourneyScreen(
                             Text(text = "🌱", fontSize = 22.sp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "1% Better Log",
+                                text = "The Developer Journey",
                                 color = TextPrimaryDark,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
@@ -150,7 +150,7 @@ fun JourneyScreen(
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "\"Every session. One improvement.\"\nCompound growth across knowledge, skill, and recovery.",
+                            text = "\"The life of a developer, captured one session at a time.\"\nEvery session represents one small improvement—solving a bug, understanding a concept, or choosing to step back and recover.",
                             color = TextSecondaryDark,
                             fontSize = 13.sp,
                             lineHeight = 18.sp
@@ -167,7 +167,7 @@ fun JourneyScreen(
                                     .padding(horizontal = 14.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    text = "${improvements.size} Total Improvements",
+                                    text = "${improvements.size} Times You Chose to Build",
                                     color = Color(0xFF10B981),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold

@@ -14,20 +14,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-data class HomeUiState(
-    val greeting: String = "Good day, Developer",
-    val developerState: DeveloperState = DeveloperState.READY,
-    val todaySessionsCount: Int = 0,
-    val todayImprovementsCount: Int = 0,
-    val totalSessionsCount: Int = 0,
-    val totalImprovementsCount: Int = 0,
-    val recentImprovements: List<OnePercentImprovementEntity> = emptyList(),
-    val latestSession: DevSessionEntity? = null,
-    val connectedGitHubUser: String? = null
+data class DailyJourneySummary(
+    val totalFocusedMinutes: Int = 0,
+    val completedSessionsCount: Int = 0,
+    val improvementsCount: Int = 0,
+    val activityBreakdown: String = ""
 )
 
 class HomeViewModel(
@@ -37,6 +33,9 @@ class HomeViewModel(
 
     private val _currentState = MutableStateFlow(DeveloperState.READY)
     val currentState: StateFlow<DeveloperState> = _currentState.asStateFlow()
+
+    private val _currentIntention = MutableStateFlow("")
+    val currentIntention: StateFlow<String> = _currentIntention.asStateFlow()
 
     val todaySessionsCount = sessionRepository.observeTodaySessionsCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -55,6 +54,22 @@ class HomeViewModel(
 
     val todaySessions = sessionRepository.observeTodaySessions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val dailySummary: StateFlow<DailyJourneySummary> = todaySessions.map { sessions ->
+        val totalMinutes = sessions.sumOf {
+            if (it.actualDurationMinutes > 0) it.actualDurationMinutes else it.targetDurationMinutes
+        }
+        val activities = sessions.map { it.activityType }.distinct()
+            .joinToString(", ") { typeName ->
+                runCatching { SessionActivityType.valueOf(typeName).displayName }.getOrDefault(typeName)
+            }
+        DailyJourneySummary(
+            totalFocusedMinutes = totalMinutes,
+            completedSessionsCount = sessions.size,
+            improvementsCount = sessions.size, // each session represents +1
+            activityBreakdown = activities
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DailyJourneySummary())
 
     private val _connectedGitHubUser = MutableStateFlow<String?>(null)
     val connectedGitHubUser: StateFlow<String?> = _connectedGitHubUser.asStateFlow()
@@ -77,13 +92,27 @@ class HomeViewModel(
         _currentState.value = state
     }
 
-    fun getDynamicGreeting(): String {
+    fun setIntention(text: String) {
+        _currentIntention.value = text
+    }
+
+    fun getGreetingTitle(): String {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         return when (hour) {
-            in 5..11 -> "Good morning, Developer"
-            in 12..16 -> "Good afternoon, Developer"
-            in 17..21 -> "Good evening, Developer"
-            else -> "Night owl session, Developer"
+            in 5..11 -> "Good morning, Developer."
+            in 12..16 -> "Good afternoon, Developer."
+            in 17..21 -> "Good evening, Developer."
+            else -> "Night owl building, Developer."
+        }
+    }
+
+    fun getGreetingSubtitle(): String {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return when (hour) {
+            in 5..11 -> "A fresh terminal. A clean slate to build and learn."
+            in 12..16 -> "In the middle of the work. Take it one problem at a time."
+            in 17..21 -> "You've had a long day.\nBut you're here."
+            else -> "Quiet hours. Deep focus. One problem at a time."
         }
     }
 
@@ -91,32 +120,6 @@ class HomeViewModel(
         if (reflection.isBlank()) return
         viewModelScope.launch {
             sessionRepository.recordStandaloneImprovement(category, reflection)
-        }
-    }
-
-    /**
-     * Helper for quick testing/logging completed sessions in Phase 0.
-     */
-    fun recordSampleCompletedSession(
-        activityType: SessionActivityType,
-        durationMinutes: Int,
-        category: ImprovementCategory,
-        improvementText: String
-    ) {
-        viewModelScope.launch {
-            val sessionId = sessionRepository.createSession(
-                activityType = activityType,
-                targetDurationMinutes = durationMinutes,
-                goal = "Sample phase 0 session",
-                initialState = _currentState.value
-            )
-            sessionRepository.completeSession(
-                sessionId = sessionId,
-                actualDurationMinutes = durationMinutes,
-                finalState = DeveloperState.FLOWING,
-                category = category,
-                reflectionText = improvementText
-            )
         }
     }
 }

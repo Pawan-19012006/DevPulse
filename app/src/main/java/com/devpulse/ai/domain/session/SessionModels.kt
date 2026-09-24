@@ -18,15 +18,21 @@ enum class SessionActivityType(val displayName: String, val icon: String, val de
  * Explicit developer state reported before, during, or after a work session.
  * (Not automated or AI-inferred).
  */
-enum class DeveloperState(val displayName: String, val emoji: String, val isPreSessionOption: Boolean) {
-    READY("Ready & Energized", "⚡", true),
-    LOW_ENERGY("Low Energy", "🔋", true),
-    MENTALLY_TIRED("Mentally Tired", "🥱", true),
-    FLOWING("In The Flow", "🌊", false),
-    GOOD("Good & Steady", "👍", false),
-    STUCK("Stuck on a Problem", "🧱", false),
-    FRUSTRATED("Frustrated", "😤", false),
-    TIRED("Tired / Needs Rest", "🛑", false)
+enum class DeveloperState(
+    val displayName: String,
+    val emoji: String,
+    val isPreSessionOption: Boolean,
+    val supportiveMessage: String
+) {
+    READY("Ready", "🔥", true, "High energy. Pick one problem to solve and stay with it."),
+    GOOD("Good", "🙂", true, "Steady focus builds the foundation. Keep your momentum going."),
+    TIRED("Tired", "😐", true, "It's okay to feel tired. A shorter session or simple task is plenty."),
+    FRUSTRATED("Frustrated", "😤", true, "Fighting the code is part of building. Step back, breathe, and tackle one piece."),
+    DRAINED("Drained", "🥱", true, "Take it gentle. Even showing up for 15 minutes is a victory."),
+    FLOWING("In Flow", "🌊", false, "Deep in the zone. Protect your focus from distractions."),
+    STUCK("Stuck", "🧱", false, "Being stuck is the edge of your knowledge. That's where you grow."),
+    LOW_ENERGY("Low Energy", "🔋", true, "Energy fluctuates. Pace yourself with a gentle task."),
+    MENTALLY_TIRED("Mentally Tired", "🥱", true, "Mental fatigue is real. Prioritize clarity over speed.")
 }
 
 /**
