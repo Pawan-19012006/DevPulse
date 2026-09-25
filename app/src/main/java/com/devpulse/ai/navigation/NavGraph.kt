@@ -45,7 +45,6 @@ fun NavGraph(navController: NavHostController) {
                     if (intention.isNotBlank()) {
                         sessionViewModel.updateGoal(intention)
                     }
-                    sessionViewModel.selectState(homeViewModel.currentState.value)
                     navController.navigate(Screen.SessionSetup.route)
                 },
                 onNavigateToActiveSession = { sessionId ->

@@ -73,7 +73,6 @@ fun HomeScreen(
     onNavigateToJourney: () -> Unit,
     onNavigateToGitHubContext: (String?) -> Unit
 ) {
-    val currentState by viewModel.currentState.collectAsState()
     val currentIntention by viewModel.currentIntention.collectAsState()
     val totalSessionsCount by viewModel.totalSessionsCount.collectAsState()
     val totalImprovementsCount by viewModel.totalImprovementsCount.collectAsState()
@@ -82,7 +81,7 @@ fun HomeScreen(
     val connectedGitHubUser by viewModel.connectedGitHubUser.collectAsState()
 
     val greetingTitle = viewModel.getGreetingTitle()
-    val greetingSubtitle = viewModel.getGreetingSubtitle()
+    val greetingSubtitle = "One session at a time."
 
     val activeSessionId = when (activeSessionState) {
         is SessionEngineState.Working -> activeSessionState.session.id
@@ -124,13 +123,7 @@ fun HomeScreen(
                 )
             }
 
-            // 2. How Are You Feeling? (User-reported Developer State)
-            item {
-                EmotionalStateSection(
-                    currentState = currentState,
-                    onStateSelected = { viewModel.setDeveloperState(it) }
-                )
-            }
+
 
             // 3. What's On Your Mind? -> Begin Dev Session CTA
             item {
@@ -273,91 +266,7 @@ private fun DeveloperGreetingSection(
     }
 }
 
-@Composable
-private fun EmotionalStateSection(
-    currentState: DeveloperState,
-    onStateSelected: (DeveloperState) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "HOW ARE YOU FEELING RIGHT NOW?",
-            color = TextSecondaryDark,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
 
-        // The 5 primary feelings highlighted in product direction
-        val feelingStates = listOf(
-            DeveloperState.READY,
-            DeveloperState.GOOD,
-            DeveloperState.TIRED,
-            DeveloperState.FRUSTRATED,
-            DeveloperState.DRAINED
-        )
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(end = 4.dp)
-        ) {
-            items(feelingStates) { state ->
-                val isSelected = state == currentState
-                val bg = if (isSelected) SurfaceVariantDark else SurfaceDark
-                val borderColor = if (isSelected) Primary else BorderDark
-
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(bg)
-                        .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-                        .clickable { onStateSelected(state) }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = state.emoji, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = state.displayName,
-                        color = if (isSelected) TextPrimaryDark else TextSecondaryDark,
-                        fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Dynamic Supportive Empathy Feedback
-        AnimatedVisibility(
-            visible = true,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark.copy(alpha = 0.6f))
-                    .border(1.dp, BorderDark.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "💬", fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = currentState.supportiveMessage,
-                        color = TextSecondaryDark,
-                        fontSize = 12.sp,
-                        fontStyle = FontStyle.Italic,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun BeginSessionCard(

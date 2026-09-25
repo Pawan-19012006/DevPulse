@@ -68,6 +68,8 @@ fun TrackerScreen(
     val totalSessionsCount by homeViewModel.totalSessionsCount.collectAsState()
     val totalImprovementsCount by homeViewModel.totalImprovementsCount.collectAsState()
     val connectedGitHubUser by homeViewModel.connectedGitHubUser.collectAsState()
+    val todaySessions by homeViewModel.todaySessions.collectAsState()
+    val todayHealthEvents by homeViewModel.todayHealthEvents.collectAsState()
 
     var selectedCategoryFilter by remember { mutableStateOf<ImprovementCategory?>(null) }
     var quickReflectionText by remember { mutableStateOf("") }
@@ -388,7 +390,15 @@ fun TrackerScreen(
             }
         } else {
             items(filteredImprovements) { item ->
-                ImprovementHistoryRow(item)
+                val matchingSession = todaySessions.firstOrNull { it.id == item.sessionId }
+                val sessionRecoveries = if (item.sessionId != null) {
+                    todayHealthEvents.filter { it.sessionId == item.sessionId }
+                } else emptyList()
+                ImprovementHistoryRow(
+                    item = item,
+                    associatedSession = matchingSession,
+                    recoveryEvents = sessionRecoveries
+                )
             }
         }
     }
@@ -427,7 +437,11 @@ private fun TrackerMetricCard(
 }
 
 @Composable
-private fun ImprovementHistoryRow(item: OnePercentImprovementEntity) {
+private fun ImprovementHistoryRow(
+    item: OnePercentImprovementEntity,
+    associatedSession: com.devpulse.ai.data.local.entity.DevSessionEntity? = null,
+    recoveryEvents: List<com.devpulse.ai.data.local.entity.HealthEventEntity> = emptyList()
+) {
     val categoryDisplayName = runCatching {
         ImprovementCategory.valueOf(item.category).displayName
     }.getOrDefault(item.category)
@@ -471,6 +485,43 @@ private fun ImprovementHistoryRow(item: OnePercentImprovementEntity) {
                 color = TextPrimaryDark,
                 lineHeight = 20.sp
             )
+
+            if (associatedSession != null || recoveryEvents.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (associatedSession != null) {
+                        val duration = if (associatedSession.actualDurationMinutes > 0) "${associatedSession.actualDurationMinutes}m" else "${associatedSession.targetDurationMinutes}m"
+                        Text(
+                            text = "From session: $duration",
+                            fontSize = 11.sp,
+                            color = TextSecondaryDark
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    if (recoveryEvents.isNotEmpty()) {
+                        val recoveryIcons = recoveryEvents.map { ev ->
+                            when (ev.type) {
+                                "HYDRATION" -> "💧"
+                                "EYE_RECOVERY" -> "👀"
+                                "MOVEMENT" -> "🧍"
+                                "BREATHING" -> "🌬️"
+                                else -> "🌿"
+                            }
+                        }.distinct().joinToString(" ")
+                        Text(
+                            text = "Recovery: $recoveryIcons",
+                            fontSize = 11.sp,
+                            color = SageGreen
+                        )
+                    }
+                }
+            }
         }
     }
 }

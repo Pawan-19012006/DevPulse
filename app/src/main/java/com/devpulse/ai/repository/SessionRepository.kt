@@ -3,6 +3,7 @@ package com.devpulse.ai.repository
 import com.devpulse.ai.DevPulseApp
 import com.devpulse.ai.data.local.DevPulseDatabase
 import com.devpulse.ai.data.local.entity.DevSessionEntity
+import com.devpulse.ai.data.local.entity.HealthEventEntity
 import com.devpulse.ai.data.local.entity.OnePercentImprovementEntity
 import com.devpulse.ai.data.local.entity.PreSessionChecklistItemEntity
 import com.devpulse.ai.data.local.entity.RecoveryActivityEntity
@@ -26,6 +27,7 @@ class SessionRepository(
     private val improvementDao = database.onePercentImprovementDao()
     private val checklistDao = database.preSessionChecklistDao()
     private val recoveryDao = database.recoveryActivityDao()
+    private val healthEventDao = database.healthEventDao()
 
     fun observeActiveSession(): Flow<DevSessionEntity?> = sessionDao.observeActiveSession()
 
@@ -68,6 +70,48 @@ class SessionRepository(
 
     fun observeRecoveryActivities(): Flow<List<RecoveryActivityEntity>> =
         recoveryDao.observeActivities()
+
+    fun observeTodayHealthEvents(): Flow<List<HealthEventEntity>> {
+        val (start, end) = getTodayTimeRange()
+        return healthEventDao.observeHealthEventsBetween(start, end)
+    }
+
+    fun observeTodayHealthCount(type: String): Flow<Int> {
+        val (start, end) = getTodayTimeRange()
+        return healthEventDao.observeCountByTypeBetween(type, start, end)
+    }
+
+    fun observeAllHealthEvents(): Flow<List<HealthEventEntity>> =
+        healthEventDao.observeAllHealthEvents()
+
+    fun observeRecentHealthEvents(limit: Int = 20): Flow<List<HealthEventEntity>> =
+        healthEventDao.observeRecentHealthEvents(limit)
+
+    fun observeHealthEventsForSession(sessionId: String): Flow<List<HealthEventEntity>> =
+        healthEventDao.observeHealthEventsForSession(sessionId)
+
+    suspend fun getHealthEventsForSession(sessionId: String): List<HealthEventEntity> = withContext(Dispatchers.IO) {
+        healthEventDao.getHealthEventsForSession(sessionId)
+    }
+
+    suspend fun recordHealthEvent(
+        sessionId: String?,
+        type: String,
+        source: String = "SESSION_NUDGE",
+        completed: Boolean = true
+    ): String = withContext(Dispatchers.IO) {
+        val eventId = UUID.randomUUID().toString()
+        val event = HealthEventEntity(
+            id = eventId,
+            sessionId = sessionId,
+            type = type,
+            timestamp = System.currentTimeMillis(),
+            completed = completed,
+            source = source
+        )
+        healthEventDao.upsertHealthEvent(event)
+        eventId
+    }
 
     suspend fun ensureDefaultsSeeded() = withContext(Dispatchers.IO) {
         if (checklistDao.getChecklistCount() == 0) {

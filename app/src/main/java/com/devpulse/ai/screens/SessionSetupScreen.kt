@@ -148,13 +148,6 @@ fun SessionSetupScreen(
                 }
             }
 
-            // Pre-Session Mindset
-            item {
-                PreSessionStateSection(
-                    selectedState = selectedState,
-                    onSelectState = { viewModel.selectState(it) }
-                )
-            }
 
             // Pre-Session Ritual Checklist
             item {
@@ -560,53 +553,6 @@ private fun GoalInputSection(
     }
 }
 
-@Composable
-private fun PreSessionStateSection(
-    selectedState: DeveloperState,
-    onSelectState: (DeveloperState) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "PRE-SESSION MINDSET",
-            color = TextSecondaryDark,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
-
-        val preOptions = listOf(DeveloperState.READY, DeveloperState.GOOD, DeveloperState.TIRED)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            preOptions.forEach { state ->
-                val isSelected = state == selectedState
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) SurfaceVariantDark else SurfaceDark)
-                        .border(1.dp, if (isSelected) Secondary else BorderDark, RoundedCornerShape(12.dp))
-                        .clickable { onSelectState(state) }
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = state.emoji, fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = state.displayName,
-                            color = if (isSelected) TextPrimaryDark else TextSecondaryDark,
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun PreSessionChecklistSection(

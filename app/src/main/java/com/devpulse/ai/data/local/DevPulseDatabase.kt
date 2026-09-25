@@ -19,9 +19,10 @@ import com.devpulse.ai.data.local.entity.*
         SessionHandoffEntity::class,
         OnePercentImprovementEntity::class,
         PreSessionChecklistItemEntity::class,
-        RecoveryActivityEntity::class
+        RecoveryActivityEntity::class,
+        HealthEventEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class DevPulseDatabase : RoomDatabase() {
@@ -37,6 +38,7 @@ abstract class DevPulseDatabase : RoomDatabase() {
     abstract fun onePercentImprovementDao(): OnePercentImprovementDao
     abstract fun preSessionChecklistDao(): PreSessionChecklistDao
     abstract fun recoveryActivityDao(): RecoveryActivityDao
+    abstract fun healthEventDao(): HealthEventDao
 
     companion object {
         @Volatile

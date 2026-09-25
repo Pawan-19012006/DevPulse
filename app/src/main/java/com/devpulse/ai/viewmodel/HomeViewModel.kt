@@ -5,8 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.devpulse.ai.DevPulseApp
 import com.devpulse.ai.data.local.DevPulseDatabase
 import com.devpulse.ai.data.local.entity.DevSessionEntity
+import com.devpulse.ai.data.local.entity.HealthEventEntity
 import com.devpulse.ai.data.local.entity.OnePercentImprovementEntity
-import com.devpulse.ai.domain.session.DeveloperState
+import com.devpulse.ai.domain.context.DeveloperContext
 import com.devpulse.ai.domain.session.ImprovementCategory
 import com.devpulse.ai.domain.session.SessionActivityType
 import com.devpulse.ai.repository.SessionRepository
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,28 +33,35 @@ class HomeViewModel(
     private val database: DevPulseDatabase = DevPulseApp.instance.database
 ) : ViewModel() {
 
-    private val _currentState = MutableStateFlow(DeveloperState.READY)
-    val currentState: StateFlow<DeveloperState> = _currentState.asStateFlow()
-
     private val _currentIntention = MutableStateFlow("")
     val currentIntention: StateFlow<String> = _currentIntention.asStateFlow()
 
-    // Dev Health - Observable Daily Wellness Check-ins
-    private val _hydrationCount = MutableStateFlow(3)
-    val hydrationCount: StateFlow<Int> = _hydrationCount.asStateFlow()
+    // Dev Health - Real Persisted Room Health Events
+    val todayHealthEvents: StateFlow<List<HealthEventEntity>> =
+        sessionRepository.observeTodayHealthEvents()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _screenRecoveryCount = MutableStateFlow(2)
-    val screenRecoveryCount: StateFlow<Int> = _screenRecoveryCount.asStateFlow()
+    val todayHydrationCount: StateFlow<Int> =
+        sessionRepository.observeTodayHealthCount("HYDRATION")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    private val _movementCount = MutableStateFlow(2)
-    val movementCount: StateFlow<Int> = _movementCount.asStateFlow()
+    val todayScreenRecoveryCount: StateFlow<Int> =
+        sessionRepository.observeTodayHealthCount("EYE_RECOVERY")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val todayMovementCount: StateFlow<Int> =
+        sessionRepository.observeTodayHealthCount("MOVEMENT")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val todayBreathingCount: StateFlow<Int> =
+        sessionRepository.observeTodayHealthCount("BREATHING")
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val latestUnfinishedHandoff = sessionRepository.observeLatestUnfinishedHandoff()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val todaySessionsCount = sessionRepository.observeTodaySessionsCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
 
     val todayImprovementsCount = sessionRepository.observeTodayImprovementsCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -80,13 +89,30 @@ class HomeViewModel(
         DailyJourneySummary(
             totalFocusedMinutes = totalMinutes,
             completedSessionsCount = sessions.size,
-            improvementsCount = sessions.size, // each session represents +1
+            improvementsCount = sessions.size,
             activityBreakdown = activities
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DailyJourneySummary())
 
     private val _connectedGitHubUser = MutableStateFlow<String?>(null)
     val connectedGitHubUser: StateFlow<String?> = _connectedGitHubUser.asStateFlow()
+
+    // Shared context provider connecting the 4 pillars
+    val developerContext: StateFlow<DeveloperContext> = combine(
+        todaySessions,
+        latestUnfinishedHandoff,
+        recentImprovements,
+        todayHealthEvents,
+        connectedGitHubUser
+    ) { sessions, handoff, improvements, healthEvents, ghUser ->
+        DeveloperContext(
+            recentSessions = sessions,
+            unfinishedHandoff = handoff,
+            recentImprovements = improvements,
+            todayHealthEvents = healthEvents,
+            connectedGitHubUser = ghUser
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DeveloperContext())
 
     init {
         viewModelScope.launch {
@@ -100,10 +126,6 @@ class HomeViewModel(
         if (profiles != null) {
             _connectedGitHubUser.value = profiles.username
         }
-    }
-
-    fun setDeveloperState(state: DeveloperState) {
-        _currentState.value = state
     }
 
     fun setIntention(text: String) {
@@ -120,26 +142,10 @@ class HomeViewModel(
         }
     }
 
-    fun getGreetingSubtitle(): String {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        return when (hour) {
-            in 5..11 -> "A fresh terminal. A clean slate to build and learn."
-            in 12..16 -> "In the middle of the work. Take it one problem at a time."
-            in 17..21 -> "You've had a long day.\nBut you're here."
-            else -> "Quiet hours. Deep focus. One problem at a time."
+    fun recordHealthAction(type: String, sessionId: String? = null, source: String = "MANUAL") {
+        viewModelScope.launch {
+            sessionRepository.recordHealthEvent(sessionId, type, source)
         }
-    }
-
-    fun logHydration() {
-        _hydrationCount.value += 1
-    }
-
-    fun logScreenRecovery() {
-        _screenRecoveryCount.value += 1
-    }
-
-    fun logMovement() {
-        _movementCount.value += 1
     }
 
     fun recordQuickImprovement(category: ImprovementCategory, reflection: String) {
@@ -194,44 +200,33 @@ class HomeViewModel(
             )
         }
 
-        // 3. Developer State & Energy
-        when (_currentState.value) {
-            DeveloperState.FRUSTRATED -> {
-                list.add(
-                    CoachGuidance(
-                        title = "Patience Over Velocity",
-                        message = "You reported frustration. Remember: encountering friction is how technical depth is built. Don't fight the compiler—step back and breathe.",
-                        category = "Mental State"
-                    )
+        // 3. Health & Recovery Pacing Observation
+        val healthEvents = todayHealthEvents.value
+        val totalRecoveryActions = healthEvents.size
+        if (totalRecoveryActions >= 3) {
+            list.add(
+                CoachGuidance(
+                    title = "Sustainable Pacing",
+                    message = "You completed $totalRecoveryActions recovery resets across your work sessions today. Consistent hydration and screen breaks protect your long-term focus.",
+                    category = "Sustainable Energy"
                 )
-            }
-            DeveloperState.TIRED -> {
-                list.add(
-                    CoachGuidance(
-                        title = "Cognitive Fatigue",
-                        message = "Problem solving degrades rapidly under fatigue. Consider a lighter task like documentation or a walk before the next deep work block.",
-                        category = "Mental State"
-                    )
+            )
+        } else if (sessions.size >= 2 && totalRecoveryActions == 0) {
+            list.add(
+                CoachGuidance(
+                    title = "Recovery Reminder",
+                    message = "You've worked through multiple blocks today without logging a screen or posture reset. Remember to step away between chapters.",
+                    category = "Sustainable Energy"
                 )
-            }
-            DeveloperState.FLOWING -> {
-                list.add(
-                    CoachGuidance(
-                        title = "Protect Your Flow",
-                        message = "You're in flow state. Silence notifications and keep external inputs minimal while clarity is high.",
-                        category = "Mental State"
-                    )
+            )
+        } else {
+            list.add(
+                CoachGuidance(
+                    title = "Quiet Workspace",
+                    message = "DevPulse naturally guides your recovery during work sessions. When a recovery nudge appears, take that 20-second break.",
+                    category = "Sustainable Energy"
                 )
-            }
-            else -> {
-                list.add(
-                    CoachGuidance(
-                        title = "Intentional Arrival",
-                        message = "You showed up with a ready mindset. Trust the process: one problem, one block at a time.",
-                        category = "Mental State"
-                    )
-                )
-            }
+            )
         }
 
         // 4. 1% Better Growth
@@ -248,7 +243,7 @@ class HomeViewModel(
             list.add(
                 CoachGuidance(
                     title = "One Lesson Per Session",
-                    message = "Every session yields one insight—a debugging pattern, a syntax lesson, or a clean refactor. Capture it in the Tracker.",
+                    message = "Every session yields one insight—a debugging pattern, an architectural decision, or a syntax clarity. Capture it in the Tracker.",
                     category = "1% Better"
                 )
             )
@@ -264,4 +259,3 @@ data class CoachGuidance(
     val category: String,
     val timestamp: String = "Today"
 )
-

@@ -112,3 +112,20 @@ data class RecoveryActivityEntity(
     val durationMinutes: Int = 5,
     val isDefault: Boolean = true
 )
+
+@Entity(
+    tableName = "health_events",
+    indices = [
+        Index(value = ["sessionId"]),
+        Index(value = ["type"]),
+        Index(value = ["timestamp"])
+    ]
+)
+data class HealthEventEntity(
+    @PrimaryKey val id: String,
+    val sessionId: String?,
+    val type: String, // "HYDRATION", "EYE_RECOVERY", "MOVEMENT", "BREATHING", "RECOVERY_SESSION"
+    val timestamp: Long,
+    val completed: Boolean = true,
+    val source: String = "SESSION_NUDGE" // "SESSION_NUDGE", "GUIDED_RECOVERY", "DEEP_WORK_BREAK", "MANUAL"
+)

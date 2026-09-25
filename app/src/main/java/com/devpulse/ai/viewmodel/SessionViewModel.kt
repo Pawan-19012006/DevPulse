@@ -22,6 +22,7 @@ class SessionViewModel(
 ) : ViewModel() {
 
     val engineState: StateFlow<SessionEngineState> = sessionEngine.state
+    val activeNudge: StateFlow<HealthNudge?> = sessionEngine.activeNudge
 
     val latestUnfinishedHandoff: StateFlow<SessionHandoffEntity?> =
         sessionRepository.observeLatestUnfinishedHandoff()
@@ -204,6 +205,22 @@ class SessionViewModel(
 
     fun resetSession() {
         sessionEngine.resetToIdle()
+    }
+
+    fun completeHealthNudge(type: HealthEventType) {
+        sessionEngine.completeHealthNudge(type)
+    }
+
+    fun dismissHealthNudge() {
+        sessionEngine.dismissHealthNudge()
+    }
+
+    fun triggerPrototypeNudge(type: HealthEventType = HealthEventType.HYDRATION) {
+        sessionEngine.triggerPrototypeNudge(type)
+    }
+
+    fun recordGuidedRecoveryHealthEvent(type: HealthEventType) {
+        sessionEngine.recordGuidedRecoveryHealthEvent(type)
     }
 
     fun recordImprovement(category: ImprovementCategory, reflection: String) {

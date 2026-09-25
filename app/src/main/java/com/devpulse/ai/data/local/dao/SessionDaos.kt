@@ -2,6 +2,7 @@ package com.devpulse.ai.data.local.dao
 
 import androidx.room.*
 import com.devpulse.ai.data.local.entity.DevSessionEntity
+import com.devpulse.ai.data.local.entity.HealthEventEntity
 import com.devpulse.ai.data.local.entity.OnePercentImprovementEntity
 import com.devpulse.ai.data.local.entity.PreSessionChecklistItemEntity
 import com.devpulse.ai.data.local.entity.RecoveryActivityEntity
@@ -145,4 +146,34 @@ interface RecoveryActivityDao {
 
     @Query("DELETE FROM recovery_activities WHERE id = :id")
     suspend fun deleteActivity(id: String)
+}
+
+@Dao
+interface HealthEventDao {
+    @Upsert
+    suspend fun upsertHealthEvent(event: HealthEventEntity)
+
+    @Upsert
+    suspend fun upsertHealthEvents(events: List<HealthEventEntity>)
+
+    @Query("SELECT * FROM health_events ORDER BY timestamp DESC")
+    fun observeAllHealthEvents(): Flow<List<HealthEventEntity>>
+
+    @Query("SELECT * FROM health_events WHERE timestamp >= :startTime AND timestamp <= :endTime ORDER BY timestamp DESC")
+    fun observeHealthEventsBetween(startTime: Long, endTime: Long): Flow<List<HealthEventEntity>>
+
+    @Query("SELECT COUNT(*) FROM health_events WHERE type = :type AND timestamp >= :startTime AND timestamp <= :endTime")
+    fun observeCountByTypeBetween(type: String, startTime: Long, endTime: Long): Flow<Int>
+
+    @Query("SELECT * FROM health_events WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    fun observeHealthEventsForSession(sessionId: String): Flow<List<HealthEventEntity>>
+
+    @Query("SELECT * FROM health_events WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    suspend fun getHealthEventsForSession(sessionId: String): List<HealthEventEntity>
+
+    @Query("SELECT COUNT(*) FROM health_events WHERE timestamp >= :startTime AND timestamp <= :endTime")
+    fun observeTotalHealthEventsBetween(startTime: Long, endTime: Long): Flow<Int>
+
+    @Query("SELECT * FROM health_events ORDER BY timestamp DESC LIMIT :limit")
+    fun observeRecentHealthEvents(limit: Int = 20): Flow<List<HealthEventEntity>>
 }

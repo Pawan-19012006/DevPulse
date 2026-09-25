@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -25,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -34,16 +34,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devpulse.ai.data.local.entity.DevSessionEntity
 import com.devpulse.ai.data.local.entity.SessionHandoffEntity
-import com.devpulse.ai.domain.session.SessionActivityType
+import com.devpulse.ai.domain.quotes.DailyQuotes
+import com.devpulse.ai.domain.quotes.DevPulseQuote
 import com.devpulse.ai.domain.session.SessionEngineState
-import com.devpulse.ai.domain.session.SessionMode
 import com.devpulse.ai.ui.theme.BackgroundDark
 import com.devpulse.ai.ui.theme.BorderDark
 import com.devpulse.ai.ui.theme.BorderSubtle
@@ -57,9 +55,6 @@ import com.devpulse.ai.ui.theme.TextPrimaryDark
 import com.devpulse.ai.ui.theme.TextSecondaryDark
 import com.devpulse.ai.viewmodel.HomeViewModel
 import com.devpulse.ai.viewmodel.SessionViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun SessionsScreen(
@@ -70,9 +65,9 @@ fun SessionsScreen(
     onNavigateToActiveSession: (String) -> Unit
 ) {
     val currentIntention by homeViewModel.currentIntention.collectAsState()
-    val todaySessions by homeViewModel.todaySessions.collectAsState()
     val latestUnfinishedHandoff by homeViewModel.latestUnfinishedHandoff.collectAsState()
     val greetingTitle = homeViewModel.getGreetingTitle()
+    val dailyQuote = DailyQuotes.getQuoteForToday()
 
     val activeSessionId = when (activeSessionState) {
         is SessionEngineState.Working -> activeSessionState.session.id
@@ -90,9 +85,9 @@ fun SessionsScreen(
             .background(BackgroundDark)
             .padding(horizontal = 22.dp),
         contentPadding = PaddingValues(top = 28.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        // Screen Header
+        // Screen Header & Daily DevPulse Quote
         item {
             Column {
                 Text(
@@ -102,7 +97,9 @@ fun SessionsScreen(
                     letterSpacing = 2.sp,
                     color = SageGreen
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+                DailyQuoteBanner(quote = dailyQuote)
+                Spacer(modifier = Modifier.height(18.dp))
                 Text(
                     text = greetingTitle,
                     fontSize = 24.sp,
@@ -138,6 +135,11 @@ fun SessionsScreen(
                         sessionViewModel.updateGoal(latestUnfinishedHandoff!!.sessionGoal)
                         sessionViewModel.updateBlockObjective(latestUnfinishedHandoff!!.nextObjective)
                         onNavigateToSessionSetup()
+                    },
+                    onStartSomethingElse = {
+                        sessionViewModel.updateGoal("")
+                        sessionViewModel.updateBlockObjective("")
+                        onNavigateToSessionSetup()
                     }
                 )
             }
@@ -151,23 +153,45 @@ fun SessionsScreen(
                 onStartClick = {
                     if (currentIntention.isNotBlank()) {
                         sessionViewModel.updateGoal(currentIntention)
+                        sessionViewModel.updateBlockObjective(currentIntention)
                     }
                     onNavigateToSessionSetup()
                 }
             )
         }
+    }
+}
 
-        // Subtle Divider
-        item {
-            HorizontalDivider(
-                color = BorderSubtle,
-                thickness = 1.dp
+/**
+ * Calm, deterministic daily DevPulse quote that remains stable throughout the day.
+ */
+@Composable
+private fun DailyQuoteBanner(quote: DevPulseQuote) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(SurfaceDark)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Column {
+            Text(
+                text = "“${quote.text}”",
+                fontSize = 13.sp,
+                fontStyle = FontStyle.Italic,
+                color = TextPrimaryDark,
+                lineHeight = 18.sp
             )
-        }
-
-        // 4. Recent Work Context
-        item {
-            RecentSessionsSection(sessions = todaySessions)
+            if (quote.source != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "— ${quote.source}",
+                    fontSize = 11.sp,
+                    color = TextSecondaryDark,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
@@ -273,12 +297,14 @@ private fun ActiveSessionResumeCard(
 }
 
 /**
- * Handoff card: Reminds developer where they left off and enables 1-tap continuation.
+ * Handoff card: Reminds developer where they left off and enables 1-tap continuation
+ * or starting something else.
  */
 @Composable
 private fun ContinuityHandoffCard(
     handoff: SessionHandoffEntity,
-    onContinue: () -> Unit
+    onContinue: () -> Unit,
+    onStartSomethingElse: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -294,29 +320,42 @@ private fun ContinuityHandoffCard(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 1.sp,
+                color = SageGreen
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "You were working on:",
+                fontSize = 12.sp,
                 color = TextSecondaryDark
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = handoff.sessionGoal,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimaryDark
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
+                text = "Still on your mind:",
+                fontSize = 12.sp,
+                color = TextSecondaryDark
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
                 text = "\"${handoff.nextObjective}\"",
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 fontStyle = FontStyle.Italic,
-                color = TextPrimaryDark,
-                lineHeight = 22.sp
+                color = MutedLavender,
+                lineHeight = 21.sp
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "From session: ${handoff.sessionGoal}",
-                fontSize = 13.sp,
-                color = TextMuted
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = onContinue,
@@ -325,12 +364,12 @@ private fun ContinuityHandoffCard(
                     .height(42.dp),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MutedLavender,
+                    containerColor = SageGreen,
                     contentColor = BackgroundDark
                 )
             ) {
                 Text(
-                    text = "Continue This Objective",
+                    text = "Continue",
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp
                 )
@@ -339,6 +378,25 @@ private fun ContinuityHandoffCard(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onStartSomethingElse,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(38.dp),
+                shape = RoundedCornerShape(8.dp),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(BorderSubtle)
+                )
+            ) {
+                Text(
+                    text = "Start Something Else",
+                    color = TextSecondaryDark,
+                    fontSize = 13.sp
                 )
             }
         }
@@ -406,7 +464,7 @@ private fun StartSessionCard(
                     .height(46.dp),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (intention.isNotBlank()) SageGreen else SurfaceVariantDark,
+                    containerColor = if (intention.isNotBlank()) MutedLavender else SurfaceVariantDark,
                     contentColor = if (intention.isNotBlank()) BackgroundDark else TextPrimaryDark
                 )
             ) {
@@ -424,116 +482,4 @@ private fun StartSessionCard(
             }
         }
     }
-}
-
-/**
- * Recent sessions list: clean, peaceful, no cards-inside-cards overload.
- */
-@Composable
-private fun RecentSessionsSection(
-    sessions: List<DevSessionEntity>
-) {
-    Column {
-        Text(
-            text = "RECENT CONTEXT",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            color = TextSecondaryDark
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (sessions.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(SurfaceDark.copy(alpha = 0.5f))
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "No sessions recorded today yet. Ready to enter your first focused block?",
-                    fontSize = 13.sp,
-                    color = TextMuted,
-                    lineHeight = 18.sp
-                )
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                sessions.take(4).forEach { session ->
-                    RecentSessionRow(session)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecentSessionRow(session: DevSessionEntity) {
-    val durationText = if (session.actualDurationMinutes > 0) {
-        "${session.actualDurationMinutes}m"
-    } else {
-        "${session.targetDurationMinutes}m"
-    }
-
-    val activityDisplayName = runCatching {
-        SessionActivityType.valueOf(session.activityType).displayName
-    }.getOrDefault(session.activityType)
-
-    val iconEmoji = runCatching {
-        SessionActivityType.valueOf(session.activityType).icon
-    }.getOrDefault("💻")
-
-    val timeFormatted = rememberFormattedTime(session.startedAt)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(SurfaceDark)
-            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = iconEmoji,
-                fontSize = 18.sp
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = session.goal?.ifBlank { activityDisplayName } ?: activityDisplayName,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = TextPrimaryDark,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "$activityDisplayName · $timeFormatted",
-                    fontSize = 12.sp,
-                    color = TextSecondaryDark
-                )
-            }
-        }
-
-        Text(
-            text = durationText,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = SageGreen
-        )
-    }
-}
-
-@Composable
-private fun rememberFormattedTime(timestamp: Long): String {
-    val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
-    return sdf.format(Date(timestamp))
 }

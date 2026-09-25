@@ -51,6 +51,7 @@ fun ActiveSessionScreen(
     onNavigateHome: () -> Unit
 ) {
     val engineState by viewModel.engineState.collectAsState()
+    val activeNudge by viewModel.activeNudge.collectAsState()
     var showEndEarlyDialog by remember { mutableStateOf(false) }
     var endEarlyAccomplished by remember { mutableStateOf("") }
     var endEarlyRemaining by remember { mutableStateOf("") }
@@ -129,10 +130,13 @@ fun ActiveSessionScreen(
                         remainingSeconds = state.remainingSeconds,
                         progressRatio = state.progressRatio,
                         isPaused = false,
+                        activeNudge = activeNudge,
+                        onCompleteNudge = { viewModel.completeHealthNudge(it) },
+                        onRemindLaterNudge = { viewModel.dismissHealthNudge() },
+                        onTriggerPrototypeNudge = { viewModel.triggerPrototypeNudge(it) },
                         onPause = { viewModel.pause() },
                         onResume = { viewModel.resume() },
                         onEndEarly = { showEndEarlyDialog = true },
-                        onReportMindset = { viewModel.reportMindset(it) },
                         onFastForward = { viewModel.fastForwardCurrentBlock() }
                     )
                 }
@@ -145,10 +149,13 @@ fun ActiveSessionScreen(
                         remainingSeconds = state.remainingSeconds,
                         progressRatio = state.progressRatio,
                         isPaused = true,
+                        activeNudge = activeNudge,
+                        onCompleteNudge = { viewModel.completeHealthNudge(it) },
+                        onRemindLaterNudge = { viewModel.dismissHealthNudge() },
+                        onTriggerPrototypeNudge = { viewModel.triggerPrototypeNudge(it) },
                         onPause = { viewModel.pause() },
                         onResume = { viewModel.resume() },
                         onEndEarly = { showEndEarlyDialog = true },
-                        onReportMindset = { viewModel.reportMindset(it) },
                         onFastForward = { viewModel.fastForwardCurrentBlock() }
                     )
                 }
@@ -172,6 +179,7 @@ fun ActiveSessionScreen(
                         remainingSeconds = state.remainingSeconds,
                         progressRatio = state.progressRatio,
                         onEndRecoveryEarly = { viewModel.endRecoveryEarly() },
+                        onLogRecoveryHealthEvent = { viewModel.recordGuidedRecoveryHealthEvent(it) },
                         onFastForward = { viewModel.fastForwardCurrentBlock() }
                     )
                 }
@@ -292,10 +300,13 @@ private fun RunningClockContent(
     remainingSeconds: Long,
     progressRatio: Float,
     isPaused: Boolean,
+    activeNudge: HealthNudge?,
+    onCompleteNudge: (HealthEventType) -> Unit,
+    onRemindLaterNudge: () -> Unit,
+    onTriggerPrototypeNudge: (HealthEventType) -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onEndEarly: () -> Unit,
-    onReportMindset: (DeveloperState) -> Unit,
     onFastForward: () -> Unit = {}
 ) {
     val minutes = remainingSeconds / 60
@@ -432,54 +443,57 @@ private fun RunningClockContent(
             }
         }
 
-        // Fast-Forward Prototype Control (Debug/Demo only)
-        item {
-            PrototypeFastForwardButton(
-                label = "⚡ FAST FORWARD",
-                sublabel = "Demo only",
-                onClick = onFastForward
-            )
+        // Session-Centered Health Nudge (Appears non-disruptively during work)
+        if (activeNudge != null) {
+            item {
+                SessionHealthNudgeCard(
+                    nudge = activeNudge,
+                    onComplete = { onCompleteNudge(activeNudge.type) },
+                    onRemindLater = onRemindLaterNudge
+                )
+            }
         }
 
-        // How's it going? (User-reported developer state)
+        // Fast-Forward & Health Nudge Prototype Controls (Debug/Demo only)
         item {
             Column(
                 modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "HOW'S IT GOING RIGHT NOW?",
-                    color = TextSecondaryDark,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                PrototypeFastForwardButton(
+                    label = "⚡ FAST FORWARD",
+                    sublabel = "Simulate Block Finish",
+                    onClick = onFastForward
                 )
-                Spacer(modifier = Modifier.height(10.dp))
-                val inSessionStates = listOf(
-                    DeveloperState.FLOWING,
-                    DeveloperState.GOOD,
-                    DeveloperState.STUCK,
-                    DeveloperState.FRUSTRATED,
-                    DeveloperState.TIRED
-                )
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    items(inSessionStates) { state ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SurfaceDark)
-                                .border(1.dp, BorderDark, RoundedCornerShape(12.dp))
-                                .clickable { onReportMindset(state) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                if (BuildConfig.DEBUG) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { onTriggerPrototypeNudge(HealthEventType.HYDRATION) },
+                            modifier = Modifier.weight(1f).height(34.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                         ) {
-                            Text(
-                                text = "${state.emoji} ${state.displayName}",
-                                color = TextPrimaryDark,
-                                fontSize = 12.sp
-                            )
+                            Text("💧 Water", fontSize = 11.sp, color = TextSecondaryDark)
+                        }
+                        OutlinedButton(
+                            onClick = { onTriggerPrototypeNudge(HealthEventType.EYE_RECOVERY) },
+                            modifier = Modifier.weight(1f).height(34.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text("👀 Eyes", fontSize = 11.sp, color = TextSecondaryDark)
+                        }
+                        OutlinedButton(
+                            onClick = { onTriggerPrototypeNudge(HealthEventType.MOVEMENT) },
+                            modifier = Modifier.weight(1f).height(34.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Text("🧍 Move", fontSize = 11.sp, color = TextSecondaryDark)
                         }
                     }
                 }
@@ -661,7 +675,60 @@ private fun RecoveryClockContent(
     remainingSeconds: Long,
     progressRatio: Float,
     onEndRecoveryEarly: () -> Unit,
+    onLogRecoveryHealthEvent: (HealthEventType) -> Unit,
     onFastForward: () -> Unit = {}
+) {
+    var selectedRecoveryType by remember { mutableStateOf<GuidedRecoveryType?>(null) }
+
+    when (val activeRecovery = selectedRecoveryType) {
+        null -> {
+            RecoverySelectionContent(
+                session = session,
+                nextObjective = nextObjective,
+                remainingSeconds = remainingSeconds,
+                onSelectRecovery = { selectedRecoveryType = it },
+                onSkipRecovery = onEndRecoveryEarly,
+                onFastForward = onFastForward
+            )
+        }
+        GuidedRecoveryType.BREATHING -> {
+            GuidedBreathingExperience(
+                onFinish = {
+                    onLogRecoveryHealthEvent(HealthEventType.BREATHING)
+                    onEndRecoveryEarly()
+                },
+                onBack = { selectedRecoveryType = null }
+            )
+        }
+        GuidedRecoveryType.EYE_RECOVERY -> {
+            GuidedEyeRecoveryExperience(
+                onFinish = {
+                    onLogRecoveryHealthEvent(HealthEventType.EYE_RECOVERY)
+                    onEndRecoveryEarly()
+                },
+                onBack = { selectedRecoveryType = null }
+            )
+        }
+        GuidedRecoveryType.MOVEMENT -> {
+            GuidedMovementResetExperience(
+                onFinish = {
+                    onLogRecoveryHealthEvent(HealthEventType.MOVEMENT)
+                    onEndRecoveryEarly()
+                },
+                onBack = { selectedRecoveryType = null }
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecoverySelectionContent(
+    session: DevSession,
+    nextObjective: String,
+    remainingSeconds: Long,
+    onSelectRecovery: (GuidedRecoveryType) -> Unit,
+    onSkipRecovery: () -> Unit,
+    onFastForward: () -> Unit
 ) {
     val minutes = remainingSeconds / 60
     val seconds = remainingSeconds % 60
@@ -672,59 +739,65 @@ private fun RecoveryClockContent(
             .fillMaxSize()
             .padding(horizontal = 24.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "🌿", fontSize = 28.sp)
-                Spacer(modifier = Modifier.height(6.dp))
+            Column {
                 Text(
-                    text = "DEV RECOVERY",
+                    text = "RECOVERY",
                     color = SageGreen,
-                    fontSize = 18.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Rest your eyes, hydrate, and step away from the code.",
-                    color = TextSecondaryDark,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        // Circular Recovery Clock
-        item {
-            Box(
-                modifier = Modifier
-                    .size(200.dp)
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(color = SurfaceVariantDark, style = Stroke(width = 10.dp.toPx()))
-                    val sweepAngle = (1.0f - progressRatio) * 360f
-                    drawArc(
-                        color = SageGreen,
-                        startAngle = -90f,
-                        sweepAngle = sweepAngle,
-                        useCenter = false,
-                        style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                }
-                Text(
-                    text = timeFormatted,
+                    text = "You've finished this work block.",
                     color = TextPrimaryDark,
-                    fontSize = 40.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Choose how you want to recover ($timeFormatted remaining):",
+                    color = TextSecondaryDark,
+                    fontSize = 13.sp
+                )
             }
         }
 
-        // Fast-Forward Break Prototype Control (Debug/Demo only)
+        // Three Guided Recovery Cards
+        item {
+            RecoveryChoiceCard(
+                icon = "🌬️",
+                title = "Guided Breathing",
+                durationLabel = "10 min",
+                description = "Box-breathing rhythm (4-4-4-4) to reset your nervous system.",
+                onClick = { onSelectRecovery(GuidedRecoveryType.BREATHING) }
+            )
+        }
+
+        item {
+            RecoveryChoiceCard(
+                icon = "👀",
+                title = "Eye Recovery",
+                durationLabel = "3 min",
+                description = "20-20-20 distance gazing to relieve screen and monitor strain.",
+                onClick = { onSelectRecovery(GuidedRecoveryType.EYE_RECOVERY) }
+            )
+        }
+
+        item {
+            RecoveryChoiceCard(
+                icon = "🧍",
+                title = "Movement Reset",
+                durationLabel = "5 min",
+                description = "Guided physical sequence: stand up, roll shoulders, and stretch.",
+                onClick = { onSelectRecovery(GuidedRecoveryType.MOVEMENT) }
+            )
+        }
+
+        // Fast-Forward Break Prototype Control
         item {
             PrototypeFastForwardButton(
                 label = "⚡ FAST FORWARD BREAK",
@@ -735,21 +808,19 @@ private fun RecoveryClockContent(
 
         // Next Objective Preview (DevPulse remembers!)
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                border = CardDefaults.outlinedCardBorder().copy(width = 1.dp, brush = Brush.linearGradient(listOf(BorderDark, BorderDark)))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceDark)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                    .padding(14.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
+                Column {
                     Text(
-                        text = "NEXT BLOCK OBJECTIVE",
-                        color = Secondary,
-                        fontSize = 11.sp,
+                        text = "NEXT OBJECTIVE WAITING",
+                        color = MutedLavender,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
@@ -757,8 +828,8 @@ private fun RecoveryClockContent(
                     Text(
                         text = nextObjective,
                         color = TextPrimaryDark,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -766,13 +837,441 @@ private fun RecoveryClockContent(
 
         item {
             OutlinedButton(
-                onClick = onEndRecoveryEarly,
+                onClick = onSkipRecovery,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp)
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(BorderSubtle)
+                )
             ) {
-                Text("End Break Early & Continue", color = TextPrimaryDark)
+                Text("Skip Break & Continue", color = TextSecondaryDark, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecoveryChoiceCard(
+    icon: String,
+    title: String,
+    durationLabel: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SurfaceDark)
+            .border(1.dp, BorderDark, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = icon, fontSize = 24.sp)
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimaryDark
+                    )
+                    Text(
+                        text = durationLabel,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SageGreen
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    fontSize = 12.sp,
+                    color = TextSecondaryDark,
+                    lineHeight = 17.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuidedBreathingExperience(
+    onFinish: () -> Unit,
+    onBack: () -> Unit
+) {
+    // 4s Inhale -> 4s Hold -> 4s Exhale -> 4s Hold (16s cycle)
+    var secondsInCycle by remember { mutableStateOf(0) }
+    var isRunning by remember { mutableStateOf(true) }
+
+    LaunchedEffect(isRunning) {
+        while (isRunning) {
+            kotlinx.coroutines.delay(1000L)
+            secondsInCycle = (secondsInCycle + 1) % 16
+        }
+    }
+
+    val (phaseTitle, phaseRemaining, targetScale) = when (secondsInCycle) {
+        in 0..3 -> Triple("BREATHE IN", 4 - secondsInCycle, 0.7f + (secondsInCycle + 1) * 0.1f)
+        in 4..7 -> Triple("HOLD", 8 - secondsInCycle, 1.15f)
+        in 8..11 -> Triple("BREATHE OUT", 12 - secondsInCycle, 1.15f - (secondsInCycle - 7) * 0.1f)
+        else -> Triple("HOLD", 16 - secondsInCycle, 0.7f)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "GUIDED BREATHING",
+                color = SageGreen,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Box Breathing (4-4-4-4)",
+                color = TextSecondaryDark,
+                fontSize = 13.sp
+            )
+        }
+
+        // Animated Breathing Guide
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = phaseTitle,
+                color = TextPrimaryDark,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp
+            )
+            Spacer(modifier = Modifier.height(28.dp))
+            Box(
+                modifier = Modifier
+                    .size((160 * targetScale).dp)
+                    .clip(CircleShape)
+                    .background(SageGreen.copy(alpha = 0.2f))
+                    .border(2.dp, SageGreen, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$phaseRemaining",
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimaryDark
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Inhale deep through your nose, exhale slowly.",
+                color = TextSecondaryDark,
+                fontSize = 12.sp
+            )
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = onFinish,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = SageGreen, contentColor = BackgroundDark)
+            ) {
+                Text("Recovery Complete", fontWeight = FontWeight.Bold)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { isRunning = !isRunning },
+                    modifier = Modifier.weight(1f).height(40.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(if (isRunning) "Pause" else "Resume", color = TextPrimaryDark, fontSize = 13.sp)
+                }
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.weight(1f).height(40.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Change", color = TextSecondaryDark, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuidedEyeRecoveryExperience(
+    onFinish: () -> Unit,
+    onBack: () -> Unit
+) {
+    var secondsLeft by remember { mutableStateOf(20) }
+
+    LaunchedEffect(Unit) {
+        while (secondsLeft > 0) {
+            kotlinx.coroutines.delay(1000L)
+            secondsLeft -= 1
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "EYE RECOVERY",
+                color = SageGreen,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "20-20-20 Rule",
+                color = TextSecondaryDark,
+                fontSize = 13.sp
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "LOOK AWAY",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimaryDark,
+                letterSpacing = 2.sp
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "$secondsLeft",
+                fontSize = 52.sp,
+                fontWeight = FontWeight.Bold,
+                color = SageGreen
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = "Look away from all screens.\nFocus on an object at least 20 feet away.\nBlink naturally and soften your gaze.",
+                fontSize = 14.sp,
+                color = TextSecondaryDark,
+                textAlign = TextAlign.Center,
+                lineHeight = 22.sp
+            )
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = onFinish,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = SageGreen, contentColor = BackgroundDark)
+            ) {
+                Text("Eyes Rested & Ready", fontWeight = FontWeight.Bold)
+            }
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Choose another recovery", color = TextSecondaryDark, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuidedMovementResetExperience(
+    onFinish: () -> Unit,
+    onBack: () -> Unit
+) {
+    val steps = listOf(
+        Pair("1. STAND UP", "Step away from your desk, chair, and screens."),
+        Pair("2. ROLL YOUR SHOULDERS", "Slow backward rolls 5 times to release neck tension."),
+        Pair("3. EXTEND YOUR SPINE", "Reach both hands overhead and lengthen your lower back."),
+        Pair("4. SHORT WALK", "Walk around the room, shake out your arms and grab water."),
+        Pair("5. RETURN WHEN READY", "Take a slow breath and return to the code with clarity.")
+    )
+    var currentStepIndex by remember { mutableStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "MOVEMENT RESET",
+                color = SageGreen,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Step ${currentStepIndex + 1} of ${steps.size}",
+                color = TextSecondaryDark,
+                fontSize = 13.sp
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(SurfaceDark)
+                .border(1.dp, BorderDark, RoundedCornerShape(16.dp))
+                .padding(24.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = steps[currentStepIndex].first,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SageGreen,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = steps[currentStepIndex].second,
+                    fontSize = 15.sp,
+                    color = TextPrimaryDark,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (currentStepIndex < steps.size - 1) {
+                Button(
+                    onClick = { currentStepIndex++ },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MutedLavender, contentColor = BackgroundDark)
+                ) {
+                    Text("Next Step", fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Button(
+                    onClick = onFinish,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SageGreen, contentColor = BackgroundDark)
+                ) {
+                    Text("Movement Complete", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Choose another recovery", color = TextSecondaryDark, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+/**
+ * Non-disruptive card displayed inside active work session when health reminder fires.
+ */
+@Composable
+private fun SessionHealthNudgeCard(
+    nudge: HealthNudge,
+    onComplete: () -> Unit,
+    onRemindLater: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SurfaceDark)
+            .border(1.dp, SageGreen.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
+            .padding(16.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = nudge.type.icon, fontSize = 18.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = nudge.title,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    color = SageGreen
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = nudge.message,
+                fontSize = 14.sp,
+                color = TextPrimaryDark,
+                lineHeight = 20.sp
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onComplete,
+                    modifier = Modifier.weight(1f).height(40.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SageGreen, contentColor = BackgroundDark)
+                ) {
+                    Text(text = nudge.actionLabel, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+                OutlinedButton(
+                    onClick = onRemindLater,
+                    modifier = Modifier.weight(1f).height(40.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                        brush = androidx.compose.ui.graphics.SolidColor(BorderDark)
+                    )
+                ) {
+                    Text(text = nudge.secondaryLabel, color = TextSecondaryDark, fontSize = 11.sp)
+                }
             }
         }
     }

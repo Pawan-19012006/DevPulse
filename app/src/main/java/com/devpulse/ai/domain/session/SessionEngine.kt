@@ -19,15 +19,18 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 import com.devpulse.ai.data.local.dao.DevSessionDao
+import com.devpulse.ai.data.local.dao.HealthEventDao
 import com.devpulse.ai.data.local.dao.OnePercentImprovementDao
 import com.devpulse.ai.data.local.dao.SessionBlockDao
 import com.devpulse.ai.data.local.dao.SessionHandoffDao
+import com.devpulse.ai.data.local.entity.HealthEventEntity
 
 class SessionEngine(
     private val sessionDao: DevSessionDao,
     private val blockDao: SessionBlockDao,
     private val handoffDao: SessionHandoffDao,
     private val improvementDao: OnePercentImprovementDao,
+    private val healthEventDao: HealthEventDao? = null,
     private val timeProvider: TimeProvider = SystemTimeProvider,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + Job()),
     private val autoStartTicker: Boolean = true
@@ -41,6 +44,7 @@ class SessionEngine(
         blockDao = database.sessionBlockDao(),
         handoffDao = database.sessionHandoffDao(),
         improvementDao = database.onePercentImprovementDao(),
+        healthEventDao = database.healthEventDao(),
         timeProvider = timeProvider,
         scope = scope,
         autoStartTicker = true
@@ -48,6 +52,11 @@ class SessionEngine(
 
     private val _state = MutableStateFlow<SessionEngineState>(SessionEngineState.Idle)
     val state: StateFlow<SessionEngineState> = _state.asStateFlow()
+
+    private val _activeNudge = MutableStateFlow<HealthNudge?>(null)
+    val activeNudge: StateFlow<HealthNudge?> = _activeNudge.asStateFlow()
+
+    private val triggeredNudgesInBlock = mutableSetOf<HealthEventType>()
 
     private var tickerJob: Job? = null
 
@@ -507,7 +516,111 @@ class SessionEngine(
 
     fun resetToIdle() {
         stopTicker()
+        _activeNudge.value = null
+        triggeredNudgesInBlock.clear()
         _state.value = SessionEngineState.Idle
+    }
+
+    private fun checkHealthNudges(elapsedSeconds: Long) {
+        if (_activeNudge.value != null) return
+        when {
+            elapsedSeconds in 600L..605L && HealthEventType.HYDRATION !in triggeredNudgesInBlock -> {
+                triggeredNudgesInBlock.add(HealthEventType.HYDRATION)
+                _activeNudge.value = HealthNudge(
+                    type = HealthEventType.HYDRATION,
+                    title = "QUICK RESET",
+                    message = "You've been focused for a while. Take a drink of water."
+                )
+            }
+            elapsedSeconds in 1200L..1205L && HealthEventType.EYE_RECOVERY !in triggeredNudgesInBlock -> {
+                triggeredNudgesInBlock.add(HealthEventType.EYE_RECOVERY)
+                _activeNudge.value = HealthNudge(
+                    type = HealthEventType.EYE_RECOVERY,
+                    title = "REST YOUR EYES",
+                    message = "Look away from the screen for 20 seconds to release tension."
+                )
+            }
+            elapsedSeconds in 1800L..1805L && HealthEventType.MOVEMENT !in triggeredNudgesInBlock -> {
+                triggeredNudgesInBlock.add(HealthEventType.MOVEMENT)
+                _activeNudge.value = HealthNudge(
+                    type = HealthEventType.MOVEMENT,
+                    title = "POSTURE RESET",
+                    message = "Stand up, roll your shoulders, and stretch your spine."
+                )
+            }
+        }
+    }
+
+    /**
+     * Development / Prototype accelerator to test session health nudges without waiting 10/20 mins.
+     */
+    fun triggerPrototypeNudge(type: HealthEventType = HealthEventType.HYDRATION) {
+        triggeredNudgesInBlock.add(type)
+        val message = when (type) {
+            HealthEventType.HYDRATION -> "You've been focused for a while. Take a drink of water."
+            HealthEventType.EYE_RECOVERY -> "Look away from the screen for 20 seconds to release tension."
+            HealthEventType.MOVEMENT -> "Stand up, roll your shoulders, and stretch your spine."
+            else -> "Take a brief pause to refresh your mind."
+        }
+        val title = when (type) {
+            HealthEventType.HYDRATION -> "QUICK RESET"
+            HealthEventType.EYE_RECOVERY -> "REST YOUR EYES"
+            HealthEventType.MOVEMENT -> "POSTURE RESET"
+            else -> "RECOVERY CHECK"
+        }
+        _activeNudge.value = HealthNudge(type = type, title = title, message = message)
+    }
+
+    fun completeHealthNudge(type: HealthEventType? = null) {
+        val targetType = type ?: _activeNudge.value?.type ?: HealthEventType.HYDRATION
+        val currentSessionId = when (val s = _state.value) {
+            is SessionEngineState.Working -> s.session.id
+            is SessionEngineState.Paused -> s.session.id
+            is SessionEngineState.Recovery -> s.session.id
+            else -> null
+        }
+        val now = timeProvider.now()
+        scope.launch {
+            healthEventDao?.upsertHealthEvent(
+                HealthEventEntity(
+                    id = UUID.randomUUID().toString(),
+                    sessionId = currentSessionId,
+                    type = targetType.name,
+                    timestamp = now,
+                    completed = true,
+                    source = "SESSION_NUDGE"
+                )
+            )
+        }
+        _activeNudge.value = null
+    }
+
+    fun dismissHealthNudge() {
+        _activeNudge.value = null
+    }
+
+    fun recordGuidedRecoveryHealthEvent(type: HealthEventType) {
+        val currentSessionId = when (val s = _state.value) {
+            is SessionEngineState.Working -> s.session.id
+            is SessionEngineState.Paused -> s.session.id
+            is SessionEngineState.Recovery -> s.session.id
+            is SessionEngineState.ReadyForNextBlock -> s.session.id
+            is SessionEngineState.WorkBlockHandoff -> s.session.id
+            else -> null
+        }
+        val now = timeProvider.now()
+        scope.launch {
+            healthEventDao?.upsertHealthEvent(
+                HealthEventEntity(
+                    id = UUID.randomUUID().toString(),
+                    sessionId = currentSessionId,
+                    type = type.name,
+                    timestamp = now,
+                    completed = true,
+                    source = "GUIDED_RECOVERY"
+                )
+            )
+        }
     }
 
     /**
@@ -631,6 +744,7 @@ class SessionEngine(
                         remainingSeconds = remaining,
                         progressRatio = progress
                     )
+                    checkHealthNudges(elapsed)
                 }
             }
 
