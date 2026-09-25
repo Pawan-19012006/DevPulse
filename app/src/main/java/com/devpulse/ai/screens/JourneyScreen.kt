@@ -56,6 +56,7 @@ import com.devpulse.ai.ui.theme.BackgroundDark
 import com.devpulse.ai.ui.theme.BorderDark
 import com.devpulse.ai.ui.theme.Primary
 import com.devpulse.ai.ui.theme.Secondary
+import com.devpulse.ai.ui.theme.SageGreen
 import com.devpulse.ai.ui.theme.SurfaceDark
 import com.devpulse.ai.ui.theme.SurfaceVariantDark
 import com.devpulse.ai.ui.theme.TextPrimaryDark
@@ -168,7 +169,7 @@ fun JourneyScreen(
                             ) {
                                 Text(
                                     text = "${improvements.size} Times You Chose to Build",
-                                    color = Color(0xFF10B981),
+                                    color = SageGreen,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -298,7 +299,7 @@ fun JourneyScreen(
                                 ) {
                                     Text(
                                         text = "${category.icon} ${category.prefixBadge}",
-                                        color = Color(0xFF10B981),
+                                        color = SageGreen,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -355,7 +356,7 @@ fun JourneyScreen(
                             ) {
                                 Text(
                                     text = cat.displayName,
-                                    color = if (isSelected) Color(0xFF10B981) else TextSecondaryDark,
+                                    color = if (isSelected) SageGreen else TextSecondaryDark,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )

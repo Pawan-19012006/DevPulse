@@ -417,12 +417,12 @@ private fun RunningClockContent(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(if (isPaused) Color(0xFFF59E0B) else Color(0xFF10B981))
+                                .background(if (isPaused) MutedAmber else SageGreen)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (isPaused) "PAUSED" else "FOCUSING",
-                            color = if (isPaused) Color(0xFFF59E0B) else Color(0xFF10B981),
+                            color = if (isPaused) MutedAmber else SageGreen,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
@@ -556,7 +556,7 @@ private fun WorkBlockHandoffContent(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (isFinalBlock) "Focus Session Complete" else "Block Complete",
-                        color = Color(0xFF10B981),
+                        color = SageGreen,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -681,7 +681,7 @@ private fun RecoveryClockContent(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "DEV RECOVERY",
-                    color = Color(0xFF10B981),
+                    color = SageGreen,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
@@ -708,7 +708,7 @@ private fun RecoveryClockContent(
                     drawCircle(color = SurfaceVariantDark, style = Stroke(width = 10.dp.toPx()))
                     val sweepAngle = (1.0f - progressRatio) * 360f
                     drawArc(
-                        color = Color(0xFF10B981),
+                        color = SageGreen,
                         startAngle = -90f,
                         sweepAngle = sweepAngle,
                         useCenter = false,
@@ -904,7 +904,7 @@ private fun SessionCompleteReflectionContent(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Session Complete",
-                        color = Color(0xFF10B981),
+                        color = SageGreen,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -989,7 +989,7 @@ private fun SessionCompleteReflectionContent(
                     ) {
                         Text(
                             text = "${category.icon} ${category.displayName}",
-                            color = if (isSelected) Color(0xFF10B981) else TextSecondaryDark,
+                            color = if (isSelected) SageGreen else TextSecondaryDark,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1062,7 +1062,7 @@ private fun SessionFinishedContent(
         Spacer(modifier = Modifier.height(14.dp))
         Text(
             text = "+1% BETTER",
-            color = Color(0xFF10B981),
+            color = SageGreen,
             fontSize = 26.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 1.5.sp
@@ -1140,7 +1140,7 @@ private fun PrototypeFastForwardButton(
         ) {
             Text(
                 text = label,
-                color = Color(0xFFF59E0B),
+                color = MutedAmber,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp
@@ -1148,11 +1148,11 @@ private fun PrototypeFastForwardButton(
             Spacer(modifier = Modifier.width(6.dp))
             Surface(
                 shape = RoundedCornerShape(6.dp),
-                color = Color(0x33F59E0B)
+                color = MutedAmber.copy(alpha = 0.2f)
             ) {
                 Text(
                     text = sublabel,
-                    color = Color(0xFFFBBF24),
+                    color = MutedAmber,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)

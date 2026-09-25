@@ -536,7 +536,7 @@ class SessionEngine(
                 stopTicker()
                 val block = current.currentBlock
                 val simulatedCompletion = now
-                scope.launch(Dispatchers.IO) {
+                scope.launch {
                     blockDao.updateBlockState(
                         id = block.id,
                         pausedAt = null,
@@ -562,7 +562,7 @@ class SessionEngine(
                 val block = current.currentBlock
                 val activePause = if (block.pausedAt != null) (now - block.pausedAt).coerceAtLeast(0L) else 0L
                 val totalPause = block.totalPausedDurationMs + activePause
-                scope.launch(Dispatchers.IO) {
+                scope.launch {
                     blockDao.updateBlockState(
                         id = block.id,
                         pausedAt = null,

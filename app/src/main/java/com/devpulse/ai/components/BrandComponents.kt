@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -20,8 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -30,61 +27,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devpulse.ai.ui.theme.BackgroundDark
 import com.devpulse.ai.ui.theme.BorderDark
+import com.devpulse.ai.ui.theme.BorderSubtle
+import com.devpulse.ai.ui.theme.MutedLavender
 import com.devpulse.ai.ui.theme.Primary
-import com.devpulse.ai.ui.theme.Secondary
+import com.devpulse.ai.ui.theme.SageGreen
 import com.devpulse.ai.ui.theme.SurfaceDark
+import com.devpulse.ai.ui.theme.SurfaceVariantDark
+import com.devpulse.ai.ui.theme.TextMuted
+import com.devpulse.ai.ui.theme.TextPrimaryDark
+import com.devpulse.ai.ui.theme.TextSecondaryDark
 
 @Composable
 fun BrandBackground(
     content: @Composable BoxScope.() -> Unit
 ) {
+    // Pure, restful dark workspace atmosphere without neon mesh orbs
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        BackgroundDark,
-                        Color(0xFF060709)
-                    )
-                )
-            )
+            .background(BackgroundDark)
     ) {
-        // Soft glowing mesh orbs inspired by Linear App
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x18BB86FC), // Soft neon purple glow
-                            Color.Transparent
-                        ),
-                        center = Offset(200f, 0f),
-                        radius = 1000f
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x1003DAC6), // Soft neon cyan glow
-                            Color.Transparent
-                        ),
-                        center = Offset(800f, 200f),
-                        radius = 900f
-                    )
-                )
-        )
         content()
     }
 }
 
+/**
+ * Calm, restrained surface card for key interactive blocks.
+ * Avoids glowing borders or heavy drop shadows.
+ */
 @Composable
 fun GlowCard(
     modifier: Modifier = Modifier,
@@ -92,24 +62,18 @@ fun GlowCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = SurfaceDark.copy(alpha = 0.85f)
+            containerColor = SurfaceDark
         ),
         border = BorderStroke(
             width = 1.dp,
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    BorderDark,
-                    BorderDark.copy(alpha = 0.3f)
-                )
-            )
+            color = BorderDark
         ),
         content = content
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PulseTextField(
     value: String,
@@ -123,28 +87,28 @@ fun PulseTextField(
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
         textStyle = TextStyle(
-            color = Color.White,
-            fontSize = 16.sp,
+            color = TextPrimaryDark,
+            fontSize = 15.sp,
             fontFamily = FontFamily.SansSerif
         ),
         placeholder = {
             Text(
                 text = placeholder,
-                color = Color(0xFF64748B),
-                fontSize = 16.sp
+                color = TextMuted,
+                fontSize = 15.sp
             )
         },
         leadingIcon = leadingIcon,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         singleLine = true,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedContainerColor = Color(0xFF090A0E),
-            unfocusedContainerColor = Color(0xFF090A0E),
-            focusedBorderColor = Primary,
+            focusedTextColor = TextPrimaryDark,
+            unfocusedTextColor = TextPrimaryDark,
+            focusedContainerColor = SurfaceVariantDark,
+            unfocusedContainerColor = SurfaceDark,
+            focusedBorderColor = MutedLavender,
             unfocusedBorderColor = BorderDark,
-            cursorColor = Primary
+            cursorColor = MutedLavender
         )
     )
 }
@@ -154,26 +118,26 @@ fun BrandButton(
     text: String,
     onClick: () -> Unit,
     enabled: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useSageGrowthAccent: Boolean = false
 ) {
-    val gradientBrush = if (enabled) {
-        Brush.linearGradient(
-            colors = listOf(Primary, Secondary)
-        )
-    } else {
-        Brush.linearGradient(
-            colors = listOf(Color(0xFF1E212E), Color(0xFF1E212E))
-        )
+    val backgroundColor = when {
+        !enabled -> SurfaceVariantDark
+        useSageGrowthAccent -> SageGreen
+        else -> MutedLavender
     }
 
-    val textColor = if (enabled) BackgroundDark else Color(0xFF64748B)
+    val textColor = when {
+        !enabled -> TextMuted
+        else -> BackgroundDark
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(gradientBrush)
+            .height(50.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(backgroundColor)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -182,8 +146,9 @@ fun BrandButton(
             style = TextStyle(
                 color = textColor,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp
+                fontSize = 15.sp
             )
         )
     }
 }
+

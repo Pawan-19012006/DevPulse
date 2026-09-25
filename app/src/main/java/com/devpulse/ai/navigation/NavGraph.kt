@@ -34,10 +34,11 @@ fun NavGraph(navController: NavHostController) {
         navController = navController,
         startDestination = Screen.Home.route
     ) {
-        // Daily Pulse Home - Main entry point
-        composable(Screen.Home.route) {
-            HomeScreen(
-                viewModel = homeViewModel,
+        // Primary Destination: 4 Pillars of DevPulse (Sessions, Health, Coach, Tracker)
+        composable(Screen.Main.route) {
+            com.devpulse.ai.screens.MainContainerScreen(
+                homeViewModel = homeViewModel,
+                sessionViewModel = sessionViewModel,
                 activeSessionState = activeSessionState,
                 onNavigateToSessionSetup = {
                     val intention = homeViewModel.currentIntention.value
@@ -49,9 +50,6 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onNavigateToActiveSession = { sessionId ->
                     navController.navigate(Screen.ActiveSession.createRoute(sessionId))
-                },
-                onNavigateToJourney = {
-                    navController.navigate(Screen.Journey.route)
                 },
                 onNavigateToGitHubContext = { username ->
                     if (!username.isNullOrBlank()) {

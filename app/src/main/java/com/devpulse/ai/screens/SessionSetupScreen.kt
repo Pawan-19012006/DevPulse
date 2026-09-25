@@ -280,7 +280,7 @@ private fun SessionContinuityCard(
                 )
                 Text(
                     text = "DevPulse remembers",
-                    color = Color(0xFF10B981),
+                    color = SageGreen,
                     fontSize = 11.sp
                 )
             }
@@ -670,7 +670,7 @@ private fun PreSessionChecklistSection(
                             checked = isChecked,
                             onCheckedChange = { onToggleCheck(item.id) },
                             colors = CheckboxDefaults.colors(
-                                checkedColor = Color(0xFF10B981),
+                                checkedColor = SageGreen,
                                 uncheckedColor = TextSecondaryDark,
                                 checkmarkColor = BackgroundDark
                             )
@@ -678,7 +678,7 @@ private fun PreSessionChecklistSection(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = item.title,
-                            color = if (isChecked) Color(0xFF10B981) else TextPrimaryDark,
+                            color = if (isChecked) SageGreen else TextPrimaryDark,
                             fontSize = 13.sp,
                             fontWeight = if (isChecked) FontWeight.Medium else FontWeight.Normal
                         )
