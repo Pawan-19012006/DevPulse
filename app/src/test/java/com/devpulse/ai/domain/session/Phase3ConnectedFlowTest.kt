@@ -221,6 +221,95 @@ class Phase3ConnectedFlowTest {
         assertEquals("sess-1", context.todayHealthEvents.first().sessionId)
         assertEquals("developer", context.connectedGitHubUser)
     }
+
+    @Test
+    fun `Early completion without nextObjective does not create fake handoff`() = runTest(testDispatcher) {
+        val sessionId = engine.startFocusSession(
+            activityType = SessionActivityType.CODING,
+            overallGoal = "Quick fix",
+            initialMindset = DeveloperState.READY,
+            durationMinutes = 25
+        )
+        advanceUntilIdle()
+
+        engine.completeSessionEarly(accomplished = "Everything is completely finished", nextObjective = null)
+        advanceUntilIdle()
+
+        val handoff = handoffDao.getLatestUnfinishedHandoff()
+        assertNull("No handoff should be created when nextObjective is null", handoff)
+    }
+
+    @Test
+    fun `Early completion with placeholder nextObjective does not create handoff`() = runTest(testDispatcher) {
+        val sessionId = engine.startFocusSession(
+            activityType = SessionActivityType.CODING,
+            overallGoal = "Quick fix",
+            initialMindset = DeveloperState.READY,
+            durationMinutes = 25
+        )
+        advanceUntilIdle()
+
+        engine.completeSessionEarly(accomplished = "Done", nextObjective = "Pick up where left off.")
+        advanceUntilIdle()
+
+        val handoff = handoffDao.getLatestUnfinishedHandoff()
+        assertNull("Placeholder handoff should not be created", handoff)
+    }
+
+    @Test
+    fun `Save optional handoff persists genuine unfinished work`() = runTest(testDispatcher) {
+        val sessionId = engine.startFocusSession(
+            activityType = SessionActivityType.CODING,
+            overallGoal = "Implement auth",
+            initialMindset = DeveloperState.READY,
+            durationMinutes = 25
+        )
+        advanceUntilIdle()
+
+        engine.saveOptionalHandoff("Finish refresh token rotation")
+        advanceUntilIdle()
+
+        val handoff = handoffDao.getLatestUnfinishedHandoff()
+        assertNotNull(handoff)
+        assertEquals("Finish refresh token rotation", handoff?.nextObjective)
+        assertEquals("Implement auth", handoff?.sessionGoal)
+        assertTrue(handoff?.isUnfinished == true)
+    }
+
+    @Test
+    fun `Legacy fake handoffs are cleaned up correctly`() = runTest(testDispatcher) {
+        handoffDao.upsertHandoff(
+            SessionHandoffEntity(
+                id = "h1",
+                sessionId = "s1",
+                blockIndex = 0,
+                sessionGoal = "Old goal",
+                accomplished = "Did something",
+                nextObjective = "Pick up where left off.",
+                isUnfinished = true,
+                createdAt = 1000L
+            )
+        )
+        handoffDao.upsertHandoff(
+            SessionHandoffEntity(
+                id = "h2",
+                sessionId = "s2",
+                blockIndex = 0,
+                sessionGoal = "Real goal",
+                accomplished = "Did something",
+                nextObjective = "Fix authentication bug",
+                isUnfinished = true,
+                createdAt = 2000L
+            )
+        )
+
+        handoffDao.cleanupLegacyFakeHandoffs()
+
+        val latest = handoffDao.getLatestUnfinishedHandoff()
+        assertNotNull(latest)
+        assertEquals("h2", latest?.id)
+        assertEquals("Fix authentication bug", latest?.nextObjective)
+    }
 }
 
 class FakeHealthEventDao : HealthEventDao {

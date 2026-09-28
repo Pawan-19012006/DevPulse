@@ -195,6 +195,17 @@ class SessionRepository(
             )
             recoveryDao.upsertActivities(defaultActivities)
         }
+
+        // Clean up legacy test handoffs that contained placeholder or empty text
+        handoffDao.cleanupLegacyFakeHandoffs()
+    }
+
+    suspend fun markHandoffCompleted(id: String) = withContext(Dispatchers.IO) {
+        handoffDao.markHandoffCompleted(id)
+    }
+
+    suspend fun cleanupLegacyFakeHandoffs() = withContext(Dispatchers.IO) {
+        handoffDao.cleanupLegacyFakeHandoffs()
     }
 
     suspend fun createSession(

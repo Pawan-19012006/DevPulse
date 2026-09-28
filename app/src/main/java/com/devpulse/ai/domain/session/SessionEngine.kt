@@ -439,7 +439,7 @@ class SessionEngine(
 
     suspend fun completeSessionEarly(
         accomplished: String,
-        nextObjective: String
+        nextObjective: String? = null
     ) = withContext(Dispatchers.IO) {
         stopTicker()
         val current = _state.value
@@ -459,18 +459,23 @@ class SessionEngine(
             completedAt = now
         )
 
-        val handoffId = UUID.randomUUID().toString()
-        val handoff = SessionHandoffEntity(
-            id = handoffId,
-            sessionId = session.id,
-            blockIndex = currentBlock.blockIndex,
-            sessionGoal = session.overallGoal,
-            accomplished = accomplished.trim().ifBlank { "Stopped session early." },
-            nextObjective = nextObjective.trim().ifBlank { session.currentObjective },
-            isUnfinished = true,
-            createdAt = now
-        )
-        handoffDao.upsertHandoff(handoff)
+        var savedHandoff: SessionHandoffEntity? = null
+        val cleanNextObjective = nextObjective?.trim()
+        if (!cleanNextObjective.isNullOrBlank() && !cleanNextObjective.equals("Pick up where left off.", ignoreCase = true)) {
+            val handoffId = UUID.randomUUID().toString()
+            val handoff = SessionHandoffEntity(
+                id = handoffId,
+                sessionId = session.id,
+                blockIndex = currentBlock.blockIndex,
+                sessionGoal = session.overallGoal,
+                accomplished = accomplished.trim().ifBlank { "Focused session ended early." },
+                nextObjective = cleanNextObjective,
+                isUnfinished = true,
+                createdAt = now
+            )
+            handoffDao.upsertHandoff(handoff)
+            savedHandoff = handoff
+        }
 
         val workedMinutes = (currentBlock.calculateElapsedSeconds(now) / 60L).toInt().coerceAtLeast(1)
         sessionDao.updateStatus(
@@ -486,8 +491,37 @@ class SessionEngine(
         )
         _state.value = SessionEngineState.SessionCompleteReflection(
             session = completedSession,
-            lastHandoff = handoff
+            lastHandoff = savedHandoff
         )
+    }
+
+    suspend fun saveOptionalHandoff(nextObjective: String) = withContext(Dispatchers.IO) {
+        val cleanObjective = nextObjective.trim()
+        if (cleanObjective.isBlank() || cleanObjective.equals("Pick up where left off.", ignoreCase = true)) {
+            return@withContext
+        }
+
+        val current = _state.value
+        val sessionId = when (current) {
+            is SessionEngineState.Finished -> current.sessionId
+            is SessionEngineState.SessionCompleteReflection -> current.session.id
+            is SessionEngineState.Working -> current.session.id
+            is SessionEngineState.Paused -> current.session.id
+            else -> return@withContext
+        }
+        val session = sessionDao.getSessionById(sessionId) ?: return@withContext
+
+        val handoff = SessionHandoffEntity(
+            id = UUID.randomUUID().toString(),
+            sessionId = sessionId,
+            blockIndex = session.currentBlockIndex,
+            sessionGoal = session.goal ?: session.title,
+            accomplished = "Completed focus session.",
+            nextObjective = cleanObjective,
+            isUnfinished = true,
+            createdAt = timeProvider.now()
+        )
+        handoffDao.upsertHandoff(handoff)
     }
 
     suspend fun submitFinalReflection(
@@ -495,21 +529,33 @@ class SessionEngine(
         reflectionText: String
     ) = withContext(Dispatchers.IO) {
         val current = _state.value
-        if (current !is SessionEngineState.SessionCompleteReflection) return@withContext
+        val (session, sessionId) = when (current) {
+            is SessionEngineState.SessionCompleteReflection -> Pair(current.session, current.session.id)
+            is SessionEngineState.WorkBlockHandoff -> Pair(current.session, current.session.id)
+            else -> return@withContext
+        }
 
         val now = timeProvider.now()
         val improvementId = UUID.randomUUID().toString()
         val improvement = OnePercentImprovementEntity(
             id = improvementId,
-            sessionId = current.session.id,
+            sessionId = sessionId,
             category = category.name,
             reflectionText = reflectionText.trim().ifBlank { "Showed up and kept building." },
             timestamp = now
         )
         improvementDao.upsertImprovement(improvement)
 
+        val actualMinutes = ((now - session.startedAt) / 60_000L).toInt().coerceAtLeast(1)
+        sessionDao.updateStatus(
+            sessionId = sessionId,
+            status = "COMPLETED",
+            completedAt = now,
+            actualDurationMinutes = actualMinutes
+        )
+
         _state.value = SessionEngineState.Finished(
-            sessionId = current.session.id,
+            sessionId = sessionId,
             improvement = improvement
         )
     }

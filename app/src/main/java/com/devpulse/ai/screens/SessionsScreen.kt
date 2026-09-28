@@ -127,18 +127,22 @@ fun SessionsScreen(
         }
 
         // 2. Continuity / Unfinished Handoff (Where you left off)
-        if (latestUnfinishedHandoff != null && latestUnfinishedHandoff?.nextObjective?.isNotBlank() == true) {
+        val isGenuineHandoff = latestUnfinishedHandoff != null &&
+            latestUnfinishedHandoff?.nextObjective?.isNotBlank() == true &&
+            latestUnfinishedHandoff?.nextObjective?.trim() != "Pick up where left off."
+
+        if (isGenuineHandoff) {
             item {
                 ContinuityHandoffCard(
                     handoff = latestUnfinishedHandoff!!,
                     onContinue = {
                         sessionViewModel.updateGoal(latestUnfinishedHandoff!!.sessionGoal)
                         sessionViewModel.updateBlockObjective(latestUnfinishedHandoff!!.nextObjective)
+                        sessionViewModel.activeContinuedHandoffId = latestUnfinishedHandoff!!.id
                         onNavigateToSessionSetup()
                     },
                     onStartSomethingElse = {
-                        sessionViewModel.updateGoal("")
-                        sessionViewModel.updateBlockObjective("")
+                        sessionViewModel.startFresh()
                         onNavigateToSessionSetup()
                     }
                 )

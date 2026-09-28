@@ -109,12 +109,25 @@ class SessionViewModel(
         _currentBlockObjective.value = objective
     }
 
+    var activeContinuedHandoffId: String? = null
+
     fun applyHandoff(handoff: SessionHandoffEntity) {
+        activeContinuedHandoffId = handoff.id
         _goal.value = handoff.sessionGoal
         _currentBlockObjective.value = handoff.nextObjective
     }
 
+    fun startFresh() {
+        activeContinuedHandoffId = null
+        _ignoredHandoffId.value = latestUnfinishedHandoff.value?.id
+        _goal.value = ""
+        _currentBlockObjective.value = ""
+    }
+
     fun dismissHandoff(handoffId: String) {
+        if (activeContinuedHandoffId == handoffId) {
+            activeContinuedHandoffId = null
+        }
         _ignoredHandoffId.value = handoffId
     }
 
@@ -191,9 +204,16 @@ class SessionViewModel(
         }
     }
 
-    fun completeSessionEarly(accomplished: String, nextObjective: String) {
+    fun completeSessionEarly(accomplished: String, nextObjective: String? = null) {
         viewModelScope.launch {
             sessionEngine.completeSessionEarly(accomplished, nextObjective)
+        }
+    }
+
+    fun saveOptionalHandoff(nextObjective: String, onSaved: () -> Unit = {}) {
+        viewModelScope.launch {
+            sessionEngine.saveOptionalHandoff(nextObjective)
+            onSaved()
         }
     }
 
@@ -205,6 +225,17 @@ class SessionViewModel(
 
     fun resetSession() {
         sessionEngine.resetToIdle()
+    }
+
+    fun completeSessionWithCleanup() {
+        val continuedId = activeContinuedHandoffId
+        activeContinuedHandoffId = null
+        viewModelScope.launch {
+            if (continuedId != null) {
+                sessionRepository.markHandoffCompleted(continuedId)
+            }
+            sessionEngine.resetToIdle()
+        }
     }
 
     fun completeHealthNudge(type: HealthEventType) {

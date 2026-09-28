@@ -78,14 +78,17 @@ interface SessionHandoffDao {
     @Upsert
     suspend fun upsertHandoff(handoff: SessionHandoffEntity)
 
-    @Query("SELECT * FROM session_handoffs WHERE isUnfinished = 1 ORDER BY createdAt DESC LIMIT 1")
+    @Query("SELECT * FROM session_handoffs WHERE isUnfinished = 1 AND TRIM(nextObjective) != '' AND TRIM(nextObjective) != 'Pick up where left off.' ORDER BY createdAt DESC LIMIT 1")
     suspend fun getLatestUnfinishedHandoff(): SessionHandoffEntity?
 
-    @Query("SELECT * FROM session_handoffs WHERE isUnfinished = 1 ORDER BY createdAt DESC LIMIT 1")
+    @Query("SELECT * FROM session_handoffs WHERE isUnfinished = 1 AND TRIM(nextObjective) != '' AND TRIM(nextObjective) != 'Pick up where left off.' ORDER BY createdAt DESC LIMIT 1")
     fun observeLatestUnfinishedHandoff(): Flow<SessionHandoffEntity?>
 
     @Query("UPDATE session_handoffs SET isUnfinished = 0 WHERE id = :id")
     suspend fun markHandoffCompleted(id: String)
+
+    @Query("UPDATE session_handoffs SET isUnfinished = 0 WHERE TRIM(nextObjective) = '' OR TRIM(nextObjective) = 'Pick up where left off.'")
+    suspend fun cleanupLegacyFakeHandoffs()
 
     @Query("SELECT * FROM session_handoffs WHERE sessionId = :sessionId ORDER BY blockIndex ASC")
     suspend fun getHandoffsForSession(sessionId: String): List<SessionHandoffEntity>

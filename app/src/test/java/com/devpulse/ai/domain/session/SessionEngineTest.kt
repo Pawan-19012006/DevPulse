@@ -798,6 +798,16 @@ class FakeSessionHandoffDao : SessionHandoffDao {
     override fun observeHandoffsForSession(sessionId: String): Flow<List<SessionHandoffEntity>> = flowOf(
         map.values.filter { it.sessionId == sessionId }.sortedBy { it.blockIndex }
     )
+
+    override suspend fun cleanupLegacyFakeHandoffs() {
+        val keys = map.keys.toList()
+        for (k in keys) {
+            val h = map[k]
+            if (h != null && (h.nextObjective.trim().isEmpty() || h.nextObjective.trim() == "Pick up where left off.")) {
+                map[k] = h.copy(isUnfinished = false)
+            }
+        }
+    }
 }
 
 class FakeOnePercentImprovementDao : OnePercentImprovementDao {

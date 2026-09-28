@@ -161,14 +161,24 @@ fun ActiveSessionScreen(
                 }
 
                 is SessionEngineState.WorkBlockHandoff -> {
-                    WorkBlockHandoffContent(
-                        session = state.session,
-                        completedBlock = state.completedBlock,
-                        isFinalBlock = state.isFinalBlock,
-                        onSubmitHandoff = { accomplished, remaining ->
-                            viewModel.submitWorkBlockHandoff(accomplished, remaining)
-                        }
-                    )
+                    if (state.isFinalBlock) {
+                        SessionCompleteReflectionContent(
+                            session = state.session,
+                            lastHandoff = null,
+                            onSubmitReflection = { category, reflection ->
+                                viewModel.submitFinalReflection(category, reflection)
+                            }
+                        )
+                    } else {
+                        WorkBlockHandoffContent(
+                            session = state.session,
+                            completedBlock = state.completedBlock,
+                            isFinalBlock = false,
+                            onSubmitHandoff = { accomplished, remaining ->
+                                viewModel.submitWorkBlockHandoff(accomplished, remaining)
+                            }
+                        )
+                    }
                 }
 
                 is SessionEngineState.Recovery -> {
@@ -208,8 +218,11 @@ fun ActiveSessionScreen(
                 is SessionEngineState.Finished -> {
                     SessionFinishedContent(
                         improvement = state.improvement,
+                        onSaveHandoff = { nextObjective ->
+                            viewModel.saveOptionalHandoff(nextObjective)
+                        },
                         onFinish = {
-                            viewModel.resetSession()
+                            viewModel.completeSessionWithCleanup()
                             onNavigateHome()
                         }
                     )
@@ -258,7 +271,7 @@ fun ActiveSessionScreen(
                     OutlinedTextField(
                         value = endEarlyRemaining,
                         onValueChange = { endEarlyRemaining = it },
-                        placeholder = { Text("What remains to be done?", color = TextSecondaryDark, fontSize = 12.sp) },
+                        placeholder = { Text("What remains to be done? (optional)", color = TextSecondaryDark, fontSize = 12.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimaryDark,
@@ -275,12 +288,12 @@ fun ActiveSessionScreen(
                         showEndEarlyDialog = false
                         viewModel.completeSessionEarly(
                             accomplished = endEarlyAccomplished.ifBlank { "Focused session ended early." },
-                            nextObjective = endEarlyRemaining.ifBlank { "Pick up where left off." }
+                            nextObjective = endEarlyRemaining.trim().ifBlank { null }
                         )
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = BackgroundDark)
                 ) {
-                    Text("Save Handoff & End", fontWeight = FontWeight.Bold)
+                    Text("End Session", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1548,68 +1561,219 @@ private fun SessionCompleteReflectionContent(
 @Composable
 private fun SessionFinishedContent(
     improvement: com.devpulse.ai.data.local.entity.OnePercentImprovementEntity?,
+    onSaveHandoff: (nextObjective: String) -> Unit = {},
     onFinish: () -> Unit
 ) {
-    Column(
+    var showAddHandoff by remember { mutableStateOf(false) }
+    var handoffText by remember { mutableStateOf("") }
+    var handoffSaved by remember { mutableStateOf(false) }
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 24.dp),
+        contentPadding = PaddingValues(top = 36.dp, bottom = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Text(text = "🌱", fontSize = 48.sp)
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = "+1% BETTER",
-            color = SageGreen,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 1.5.sp
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Every session. One small improvement.",
-            color = TextSecondaryDark,
-            fontSize = 14.sp
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
+        item {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(text = "★", fontSize = 40.sp, color = SageGreen)
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "CONSTELLATION STAR ADDED",
+                    color = SageGreen,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "+1% BETTER",
+                    color = TextPrimaryDark,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Nice work. You showed up and moved your journey forward.",
+                    color = TextSecondaryDark,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
 
         if (improvement != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                border = CardDefaults.outlinedCardBorder().copy(width = 1.dp, brush = Brush.linearGradient(listOf(BorderDark, BorderDark)))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                    border = CardDefaults.outlinedCardBorder().copy(width = 1.dp, brush = Brush.linearGradient(listOf(BorderDark, BorderDark)))
                 ) {
-                    Text(
-                        text = "\"${improvement.reflectionText}\"",
-                        color = TextPrimaryDark,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "${improvement.category.uppercase()} IMPROVEMENT",
+                            color = Secondary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "\"${improvement.reflectionText}\"",
+                            color = TextPrimaryDark,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 22.sp
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        // Optional Unfinished Work / Next Handoff
+        item {
+            when {
+                handoffSaved -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(SurfaceDark)
+                            .border(1.dp, SageGreen.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                            .padding(16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = SageGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Handoff saved for next session",
+                                    color = SageGreen,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "\"$handoffText\"",
+                                    color = TextPrimaryDark,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
 
-        Button(
-            onClick = onFinish,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = BackgroundDark)
-        ) {
-            Text("Return to Daily Pulse", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                showAddHandoff -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                        border = CardDefaults.outlinedCardBorder().copy(width = 1.dp, brush = Brush.linearGradient(listOf(BorderDark, BorderDark)))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "CONTINUE LATER? (OPTIONAL)",
+                                color = Secondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = "What should you pick up next time?",
+                                color = TextSecondaryDark,
+                                fontSize = 12.sp
+                            )
+                            OutlinedTextField(
+                                value = handoffText,
+                                onValueChange = { handoffText = it },
+                                placeholder = { Text("e.g. Finish API error handling...", color = TextSecondaryDark, fontSize = 13.sp) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimaryDark,
+                                    unfocusedTextColor = TextPrimaryDark,
+                                    focusedBorderColor = Primary,
+                                    unfocusedBorderColor = BorderDark
+                                )
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (handoffText.isNotBlank()) {
+                                            onSaveHandoff(handoffText)
+                                            handoffSaved = true
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = BackgroundDark)
+                                ) {
+                                    Text("Save Handoff", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                OutlinedButton(
+                                    onClick = { showAddHandoff = false },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text("Skip", color = TextSecondaryDark, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    OutlinedButton(
+                        onClick = { showAddHandoff = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = ButtonDefaults.outlinedButtonBorder.copy(
+                            brush = androidx.compose.ui.graphics.SolidColor(BorderDark)
+                        )
+                    ) {
+                        Text("+ Add unfinished work (optional)", color = TextSecondaryDark, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        item {
+            Button(
+                onClick = onFinish,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = BackgroundDark)
+            ) {
+                Text("Done", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
         }
     }
 }

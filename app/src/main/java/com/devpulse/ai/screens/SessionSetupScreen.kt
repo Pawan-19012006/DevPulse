@@ -1,5 +1,7 @@
 package com.devpulse.ai.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,8 +22,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.devpulse.ai.data.local.entity.PreSessionChecklistItemEntity
 import com.devpulse.ai.data.local.entity.SessionHandoffEntity
 import com.devpulse.ai.domain.session.*
@@ -42,14 +48,16 @@ fun SessionSetupScreen(
     val selectedState by viewModel.selectedState.collectAsState()
     val goal by viewModel.goal.collectAsState()
     val currentBlockObjective by viewModel.currentBlockObjective.collectAsState()
-    val checklistItems by viewModel.checklistItems.collectAsState()
-    val checkedItemIds by viewModel.checkedItemIds.collectAsState()
     val latestHandoff by viewModel.latestUnfinishedHandoff.collectAsState()
     val ignoredHandoffId by viewModel.ignoredHandoffId.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
-    var showAddChecklistDialog by remember { mutableStateOf(false) }
-    var newChecklistText by remember { mutableStateOf("") }
+    var showPreparationDialog by remember { mutableStateOf(false) }
+
+    val isGenuineHandoff = latestHandoff != null &&
+            latestHandoff?.id != ignoredHandoffId &&
+            !latestHandoff?.nextObjective.isNullOrBlank() &&
+            !latestHandoff?.nextObjective.equals("Pick up where left off.", ignoreCase = true)
 
     Scaffold(
         containerColor = BackgroundDark,
@@ -84,13 +92,18 @@ fun SessionSetupScreen(
             contentPadding = PaddingValues(top = 10.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            // Unfinished Session Handoff Continuity Card
-            if (latestHandoff != null && latestHandoff?.id != ignoredHandoffId) {
+            // Unfinished Session Handoff Continuity Card (Only shown when genuine handoff exists)
+            if (isGenuineHandoff) {
                 item {
                     SessionContinuityCard(
                         handoff = latestHandoff!!,
-                        onContinue = { viewModel.applyHandoff(latestHandoff!!) },
-                        onDismiss = { viewModel.dismissHandoff(latestHandoff!!.id) }
+                        onContinue = {
+                            viewModel.applyHandoff(latestHandoff!!)
+                            showPreparationDialog = true
+                        },
+                        onStartFresh = {
+                            viewModel.startFresh()
+                        }
                     )
                 }
             }
@@ -148,25 +161,11 @@ fun SessionSetupScreen(
                 }
             }
 
-
-            // Pre-Session Ritual Checklist
-            item {
-                PreSessionChecklistSection(
-                    items = checklistItems,
-                    checkedIds = checkedItemIds,
-                    onToggleCheck = { viewModel.toggleCheckItem(it) },
-                    onAddCustomClick = { showAddChecklistDialog = true }
-                )
-            }
-
-            // Action: Begin Session
+            // Action: Begin Session (Triggers Environment Preparation Modal)
             item {
                 Button(
                     onClick = {
-                        coroutineScope.launch {
-                            val sessionId = viewModel.startConfiguredSession()
-                            onSessionStarted(sessionId)
-                        }
+                        showPreparationDialog = true
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -182,9 +181,9 @@ fun SessionSetupScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (sessionMode == SessionMode.FOCUS) {
-                            "Begin Focus Session (${selectedDuration}m)"
+                            "Start Focus Session (${selectedDuration}m)"
                         } else {
-                            "Begin Deep Work (${deepWorkPreset.label})"
+                            "Start Deep Work (${deepWorkPreset.label})"
                         },
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
@@ -194,48 +193,15 @@ fun SessionSetupScreen(
         }
     }
 
-    // Dialog for adding custom checklist item
-    if (showAddChecklistDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddChecklistDialog = false },
-            containerColor = SurfaceDark,
-            title = {
-                Text(
-                    text = "Add Environment Item",
-                    color = TextPrimaryDark,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                OutlinedTextField(
-                    value = newChecklistText,
-                    onValueChange = { newChecklistText = it },
-                    placeholder = { Text("e.g. Put on headphones", color = TextSecondaryDark) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPrimaryDark,
-                        unfocusedTextColor = TextPrimaryDark,
-                        focusedBorderColor = Primary,
-                        unfocusedBorderColor = BorderDark
-                    )
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newChecklistText.isNotBlank()) {
-                            viewModel.addCustomChecklistItem(newChecklistText)
-                            newChecklistText = ""
-                            showAddChecklistDialog = false
-                        }
-                    }
-                ) {
-                    Text("Add", color = Primary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddChecklistDialog = false }) {
-                    Text("Cancel", color = TextSecondaryDark)
+    // Modal: Environment Preparation Dialog
+    if (showPreparationDialog) {
+        EnvironmentPreparationDialog(
+            onDismissRequest = { showPreparationDialog = false },
+            onEnterSession = {
+                coroutineScope.launch {
+                    val sessionId = viewModel.startConfiguredSession()
+                    showPreparationDialog = false
+                    onSessionStarted(sessionId)
                 }
             }
         )
@@ -246,7 +212,7 @@ fun SessionSetupScreen(
 private fun SessionContinuityCard(
     handoff: SessionHandoffEntity,
     onContinue: () -> Unit,
-    onDismiss: () -> Unit
+    onStartFresh: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -285,7 +251,7 @@ private fun SessionContinuityCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Unfinished: \"${handoff.nextObjective}\"",
+                text = "UNFINISHED: \"${handoff.nextObjective}\"",
                 color = TextPrimaryDark,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
@@ -301,7 +267,7 @@ private fun SessionContinuityCard(
                     Text("Continue This", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
                 OutlinedButton(
-                    onClick = onDismiss,
+                    onClick = onStartFresh,
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Start Fresh", color = TextSecondaryDark, fontSize = 13.sp)
@@ -555,80 +521,178 @@ private fun GoalInputSection(
 
 
 @Composable
-private fun PreSessionChecklistSection(
-    items: List<PreSessionChecklistItemEntity>,
-    checkedIds: Set<String>,
-    onToggleCheck: (String) -> Unit,
-    onAddCustomClick: () -> Unit
+private fun EnvironmentPreparationDialog(
+    onDismissRequest: () -> Unit,
+    onEnterSession: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "PREPARE YOUR ENVIRONMENT",
-                    color = TextSecondaryDark,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = "Give yourself a clean space to build.",
-                    color = TextSecondaryDark,
-                    fontSize = 12.sp
-                )
-            }
-            Text(
-                text = "+ Add Item",
-                color = Primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onAddCustomClick() }
-            )
-        }
+    val items = listOf(
+        "Turn off distracting notifications",
+        "Keep water nearby",
+        "Define ONE specific problem to solve",
+        "Open required IDE, tools & docs",
+        "Put phone out of sight / focus mode"
+    )
+    val checkedIndices = remember { mutableStateListOf<Int>() }
+    val allCompleted = checkedIndices.size == items.size
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-            border = CardDefaults.outlinedCardBorder().copy(width = 1.dp, brush = Brush.linearGradient(listOf(BorderDark, BorderDark)))
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .wrapContentHeight(),
+            shape = RoundedCornerShape(20.dp),
+            color = SurfaceDark,
+            border = BorderStroke(1.dp, BorderDark),
+            tonalElevation = 8.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp, horizontal = 10.dp)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                items.forEach { item ->
-                    val isChecked = checkedIds.contains(item.id)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onToggleCheck(item.id) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = isChecked,
-                            onCheckedChange = { onToggleCheck(item.id) },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = SageGreen,
-                                uncheckedColor = TextSecondaryDark,
-                                checkmarkColor = BackgroundDark
+                Text(
+                    text = "PREPARE TO FOCUS",
+                    color = SageGreen,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Give yourself a clean space to build.",
+                    color = TextSecondaryDark,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items.forEachIndexed { index, text ->
+                        val isChecked = checkedIndices.contains(index)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isChecked) SurfaceVariantDark.copy(alpha = 0.6f) else SurfaceVariantDark.copy(alpha = 0.25f))
+                                .border(
+                                    1.dp,
+                                    if (isChecked) SageGreen.copy(alpha = 0.5f) else BorderDark,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable {
+                                    if (isChecked) {
+                                        checkedIndices.remove(index)
+                                    } else {
+                                        checkedIndices.add(index)
+                                    }
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = {
+                                    if (isChecked) {
+                                        checkedIndices.remove(index)
+                                    } else {
+                                        checkedIndices.add(index)
+                                    }
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = Primary,
+                                    uncheckedColor = TextSecondaryDark,
+                                    checkmarkColor = BackgroundDark
+                                )
                             )
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = text,
+                                color = if (isChecked) TextPrimaryDark else TextSecondaryDark,
+                                fontSize = 13.sp,
+                                fontWeight = if (isChecked) FontWeight.Medium else FontWeight.Normal,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                AnimatedContent(
+                    targetState = allCompleted,
+                    label = "ChecklistCompletionStatus"
+                ) { ready ->
+                    if (ready) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = SageGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "✓ Environment ready",
+                                color = SageGreen,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
                         Text(
-                            text = item.title,
-                            color = if (isChecked) SageGreen else TextPrimaryDark,
-                            fontSize = 13.sp,
-                            fontWeight = if (isChecked) FontWeight.Medium else FontWeight.Normal
+                            text = "${checkedIndices.size} / ${items.size} completed",
+                            color = TextSecondaryDark,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onEnterSession,
+                    enabled = allCompleted,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Primary,
+                        contentColor = BackgroundDark,
+                        disabledContainerColor = SurfaceVariantDark,
+                        disabledContentColor = TextMuted
+                    )
+                ) {
+                    Text(
+                        text = if (allCompleted) "Enter Session →" else "Enter Session",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                TextButton(
+                    onClick = onDismissRequest,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Cancel",
+                        color = TextSecondaryDark,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
