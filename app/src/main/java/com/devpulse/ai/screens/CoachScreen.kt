@@ -1,7 +1,13 @@
 package com.devpulse.ai.screens
 
+import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,41 +17,60 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.devpulse.ai.domain.coach.CoachAction
+import com.devpulse.ai.domain.coach.CoachChatMessage
+import com.devpulse.ai.domain.coach.DeveloperContextSummary
+import com.devpulse.ai.domain.coach.MessageSender
+import com.devpulse.ai.domain.constellation.MockConstellation
 import com.devpulse.ai.ui.theme.BackgroundDark
 import com.devpulse.ai.ui.theme.BorderDark
 import com.devpulse.ai.ui.theme.BorderSubtle
-import com.devpulse.ai.ui.theme.MutedAmber
-import com.devpulse.ai.ui.theme.MutedLavender
 import com.devpulse.ai.ui.theme.SageGreen
 import com.devpulse.ai.ui.theme.SurfaceDark
 import com.devpulse.ai.ui.theme.SurfaceVariantDark
 import com.devpulse.ai.ui.theme.TextMuted
 import com.devpulse.ai.ui.theme.TextPrimaryDark
 import com.devpulse.ai.ui.theme.TextSecondaryDark
-import com.devpulse.ai.viewmodel.CoachGuidance
+import com.devpulse.ai.viewmodel.CoachViewModel
 import com.devpulse.ai.viewmodel.HomeViewModel
 import com.devpulse.ai.viewmodel.SessionViewModel
 
@@ -53,105 +78,253 @@ import com.devpulse.ai.viewmodel.SessionViewModel
 fun CoachScreen(
     homeViewModel: HomeViewModel,
     sessionViewModel: SessionViewModel,
-    onNavigateToSessionSetup: () -> Unit
+    coachViewModel: CoachViewModel = viewModel(),
+    onNavigateToSessionSetup: () -> Unit,
+    onNavigateToSessions: () -> Unit = {},
+    onNavigateToHealth: () -> Unit = {},
+    onNavigateToTracker: () -> Unit = {}
 ) {
-    val guidanceList = homeViewModel.getCoachGuidanceList()
-    val latestUnfinishedHandoff by homeViewModel.latestUnfinishedHandoff.collectAsState()
+    val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
-    LazyColumn(
+    val prefs = remember(context) {
+        context.getSharedPreferences("devpulse_constellation_prefs", Context.MODE_PRIVATE)
+    }
+
+    val goalTitle = prefs.getString("goal_title", "Become a Backend Developer") ?: "Become a Backend Developer"
+    val targetDays = prefs.getInt("target_days", 60)
+
+    val todaySessions by homeViewModel.todaySessions.collectAsState()
+    val todayHealthEvents by homeViewModel.todayHealthEvents.collectAsState()
+    val dailySummary by homeViewModel.dailySummary.collectAsState()
+    val latestHandoff by homeViewModel.latestUnfinishedHandoff.collectAsState()
+    val improvements by sessionViewModel.allImprovements.collectAsState()
+    val connectedGitHubUser by homeViewModel.connectedGitHubUser.collectAsState()
+
+    val meaningfulDaysCount = MockConstellation.stars.size + improvements.size
+
+    // Build structured DevPulse context snapshot for the coach
+    val contextSummary = remember(
+        goalTitle,
+        targetDays,
+        meaningfulDaysCount,
+        todaySessions,
+        todayHealthEvents,
+        dailySummary,
+        latestHandoff,
+        improvements,
+        connectedGitHubUser
+    ) {
+        DeveloperContextSummary(
+            currentGoal = goalTitle,
+            targetDays = targetDays,
+            meaningfulDays = meaningfulDaysCount,
+            currentDailyShip = latestHandoff?.sessionGoal ?: "Implement refresh-token handling",
+            dailyShipStatus = if (latestHandoff != null) "In Progress" else "Active",
+            sessionsToday = todaySessions.size,
+            totalFocusMinutesToday = dailySummary.totalFocusedMinutes,
+            averageSessionDuration = if (todaySessions.isNotEmpty()) dailySummary.totalFocusedMinutes / todaySessions.size else 25,
+            recoverySessionsToday = todayHealthEvents.size,
+            recentRecoveryTypes = todayHealthEvents.map { it.type }.distinct(),
+            recentOnePercentImprovements = improvements.takeLast(3).map { it.reflectionText },
+            recentOnePercentCategories = improvements.takeLast(3).map { it.category },
+            githubConnected = connectedGitHubUser != null,
+            githubUsername = connectedGitHubUser
+        )
+    }
+
+    val messages by coachViewModel.messages.collectAsState()
+    val isLoading by coachViewModel.isLoading.collectAsState()
+    val inputText by coachViewModel.inputText.collectAsState()
+
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to bottom whenever a new message arrives or loading state changes
+    LaunchedEffect(messages.size, isLoading) {
+        val targetIndex = (messages.size - 1 + if (isLoading) 1 else 0).coerceAtLeast(0)
+        listState.animateScrollToItem(targetIndex)
+    }
+
+    val handleAction: (CoachAction) -> Unit = { action ->
+        when (action) {
+            CoachAction.START_RECOVERY -> onNavigateToHealth()
+            CoachAction.CONTINUE_DAILY_SHIP -> {
+                latestHandoff?.let { handoff ->
+                    sessionViewModel.updateGoal(handoff.sessionGoal)
+                    sessionViewModel.updateBlockObjective(handoff.nextObjective)
+                }
+                onNavigateToSessions()
+            }
+            CoachAction.START_FOCUS_SESSION -> onNavigateToSessionSetup()
+            CoachAction.VIEW_TRACKER -> onNavigateToTracker()
+            CoachAction.NONE -> Unit
+        }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundDark)
-            .padding(horizontal = 22.dp),
-        contentPadding = PaddingValues(top = 28.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Screen Header
-        item {
-            Column {
-                Text(
-                    text = "DEV COACH",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    color = SageGreen
+        // TOP HEADER: DEV COACH
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 12.dp)
+        ) {
+            Text(
+                text = "DEV COACH",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                color = SageGreen
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Your developer wellness & progress companion.",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = TextSecondaryDark
+            )
+        }
+
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = BorderSubtle.copy(alpha = 0.5f)
+        )
+
+        // CHAT CONVERSATION AREA
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            items(messages, key = { it.id }) { message ->
+                ChatMessageItem(
+                    message = message,
+                    onActionClick = { handleAction(message.action) }
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "A quiet voice in your journey.",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimaryDark,
-                    letterSpacing = (-0.5).sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Grounded observations from your actual sessions and patterns.",
-                    fontSize = 14.sp,
-                    color = TextSecondaryDark
-                )
+            }
+
+            if (isLoading) {
+                item(key = "loading_typing_indicator") {
+                    CoachTypingIndicator()
+                }
             }
         }
 
-        // Section: Active Observations & Guidance
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(
-                    text = "ACTIVE GUIDANCE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    color = TextSecondaryDark
-                )
+        // INITIAL STARTER PROMPTS (only show when conversation is at the start)
+        if (messages.size <= 1) {
+            val starterPrompts = listOf(
+                "Should I take a break?",
+                "What should I work on next?",
+                "Am I overworking?",
+                "How is my progress?"
+            )
 
-                guidanceList.forEach { guidance ->
-                    CoachGuidanceCard(
-                        guidance = guidance,
-                        isHandoff = guidance.category == "Continuity",
-                        onContinueHandoff = {
-                            latestUnfinishedHandoff?.let { handoff ->
-                                sessionViewModel.updateGoal(handoff.sessionGoal)
-                                sessionViewModel.updateBlockObjective(handoff.nextObjective)
-                                onNavigateToSessionSetup()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                starterPrompts.forEach { prompt ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(SurfaceDark)
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
+                            .clickable {
+                                coachViewModel.selectPromptSuggestion(prompt, contextSummary)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = prompt,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextPrimaryDark
+                        )
+                    }
+                }
+            }
+        }
+
+        // BOTTOM INPUT BAR
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = BorderSubtle.copy(alpha = 0.4f)
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(BackgroundDark)
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { coachViewModel.updateInputText(it) },
+                    placeholder = {
+                        Text(
+                            text = "Ask your coach...",
+                            fontSize = 14.sp,
+                            color = TextMuted
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SurfaceDark,
+                        unfocusedContainerColor = SurfaceDark,
+                        focusedBorderColor = SageGreen,
+                        unfocusedBorderColor = BorderSubtle,
+                        focusedTextColor = TextPrimaryDark,
+                        unfocusedTextColor = TextPrimaryDark
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        imeAction = ImeAction.Send
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            if (inputText.isNotBlank() && !isLoading) {
+                                val text = inputText
+                                coachViewModel.sendMessage(text, contextSummary)
+                                keyboardController?.hide()
                             }
                         }
                     )
-                }
-            }
-        }
-
-        item {
-            HorizontalDivider(
-                color = BorderSubtle,
-                thickness = 1.dp
-            )
-        }
-
-        // Section: Mental Anchors for Developers
-        item {
-            Column {
-                Text(
-                    text = "ENGINEERING PRINCIPLES",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    color = TextSecondaryDark
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuoteAnchor(
-                        quote = "“Make it work, make it right, make it fast.”",
-                        author = "Kent Beck"
-                    )
-                    QuoteAnchor(
-                        quote = "“Code is read much more often than it is written.”",
-                        author = "Guido van Rossum"
-                    )
-                    QuoteAnchor(
-                        quote = "“Simplicity is prerequisite for reliability.”",
-                        author = "Edsger W. Dijkstra"
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(if (inputText.isNotBlank() && !isLoading) SageGreen else SurfaceDark)
+                        .clickable(enabled = inputText.isNotBlank() && !isLoading) {
+                            val text = inputText
+                            coachViewModel.sendMessage(text, contextSummary)
+                            keyboardController?.hide()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send",
+                        tint = if (inputText.isNotBlank() && !isLoading) BackgroundDark else TextMuted,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -159,90 +332,136 @@ fun CoachScreen(
     }
 }
 
-@Composable
-private fun CoachGuidanceCard(
-    guidance: CoachGuidance,
-    isHandoff: Boolean,
-    onContinueHandoff: () -> Unit
-) {
-    val categoryColor = when (guidance.category) {
-        "Continuity" -> MutedAmber
-        "Focus Pattern" -> MutedLavender
-        "Mental State" -> SageGreen
-        "1% Better" -> SageGreen
-        else -> TextSecondaryDark
-    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(SurfaceDark)
-            .border(1.dp, BorderDark, RoundedCornerShape(12.dp))
-            .padding(16.dp)
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+@Composable
+private fun ChatMessageItem(
+    message: CoachChatMessage,
+    onActionClick: () -> Unit
+) {
+    if (message.sender == MessageSender.USER) {
+        // User message bubble (right-aligned, contrasting surface)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.82f)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 16.dp,
+                            topEnd = 4.dp,
+                            bottomEnd = 16.dp,
+                            bottomStart = 16.dp
+                        )
+                    )
+                    .background(SurfaceDark)
+                    .border(
+                        1.dp,
+                        SageGreen.copy(alpha = 0.35f),
+                        RoundedCornerShape(
+                            topStart = 16.dp,
+                            topEnd = 4.dp,
+                            bottomEnd = 16.dp,
+                            bottomStart = 16.dp
+                        )
+                    )
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
                 Text(
-                    text = guidance.category.uppercase(),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    color = categoryColor
-                )
-
-                Text(
-                    text = guidance.timestamp,
-                    fontSize = 11.sp,
-                    color = TextMuted
+                    text = message.text,
+                    fontSize = 14.sp,
+                    color = TextPrimaryDark,
+                    lineHeight = 20.sp
                 )
             }
+        }
+    } else {
+        // Coach message bubble (left-aligned, dark elevated surface with subtle green accent)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 4.dp,
+                            topEnd = 16.dp,
+                            bottomEnd = 16.dp,
+                            bottomStart = 16.dp
+                        )
+                    )
+                    .background(SurfaceDark)
+                    .border(
+                        1.dp,
+                        BorderSubtle,
+                        RoundedCornerShape(
+                            topStart = 4.dp,
+                            topEnd = 16.dp,
+                            bottomEnd = 16.dp,
+                            bottomStart = 16.dp
+                        )
+                    )
+                    .padding(14.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Small header badge
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(SageGreen)
+                        )
+                        Text(
+                            text = if (message.isFromAi) "✦ Gemini" else "✦ DevPulse Coach",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                            color = SageGreen
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = guidance.title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimaryDark
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = guidance.message,
-                fontSize = 13.sp,
-                color = TextSecondaryDark,
-                lineHeight = 19.sp
-            )
-
-            if (isHandoff) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onContinueHandoff,
-                    shape = RoundedCornerShape(6.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SurfaceVariantDark,
-                        contentColor = TextPrimaryDark
-                    ),
-                    modifier = Modifier.height(34.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
                     Text(
-                        text = "Continue Objective",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
+                        text = message.text,
+                        fontSize = 14.sp,
+                        color = TextPrimaryDark,
+                        lineHeight = 21.sp
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp)
-                    )
+
+                    // Optional Contextual Action Button
+                    if (message.action != CoachAction.NONE && message.actionLabel.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Button(
+                            onClick = onActionClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SageGreen,
+                                contentColor = BackgroundDark
+                            )
+                        ) {
+                            Text(
+                                text = message.actionLabel,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -250,31 +469,42 @@ private fun CoachGuidanceCard(
 }
 
 @Composable
-private fun QuoteAnchor(
-    quote: String,
-    author: String
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(SurfaceDark.copy(alpha = 0.5f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-            .padding(14.dp)
+private fun CoachTypingIndicator() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
     ) {
-        Column {
-            Text(
-                text = quote,
-                fontSize = 13.sp,
-                fontStyle = FontStyle.Italic,
-                color = TextPrimaryDark
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "— $author",
-                fontSize = 11.sp,
-                color = TextMuted
-            )
+        Box(
+            modifier = Modifier
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 4.dp,
+                        topEnd = 16.dp,
+                        bottomEnd = 16.dp,
+                        bottomStart = 16.dp
+                    )
+                )
+                .background(SurfaceDark)
+                .border(1.dp, BorderSubtle, RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(SageGreen)
+                )
+                Text(
+                    text = "Coach is thinking...",
+                    fontSize = 12.sp,
+                    color = TextSecondaryDark,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }

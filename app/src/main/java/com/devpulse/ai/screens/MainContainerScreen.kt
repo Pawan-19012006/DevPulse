@@ -88,7 +88,10 @@ fun MainContainerScreen(
                     MainTab.COACH -> CoachScreen(
                         homeViewModel = homeViewModel,
                         sessionViewModel = sessionViewModel,
-                        onNavigateToSessionSetup = onNavigateToSessionSetup
+                        onNavigateToSessionSetup = onNavigateToSessionSetup,
+                        onNavigateToSessions = { selectedTab = MainTab.SESSIONS },
+                        onNavigateToHealth = { selectedTab = MainTab.HEALTH },
+                        onNavigateToTracker = { selectedTab = MainTab.TRACKER }
                     )
                     MainTab.TRACKER -> TrackerScreen(
                         homeViewModel = homeViewModel,

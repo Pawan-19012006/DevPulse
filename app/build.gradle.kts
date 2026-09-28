@@ -19,6 +19,11 @@ android {
     val rawGithubToken = localProperties.getProperty("GITHUB_TOKEN") ?: ""
     val githubToken = rawGithubToken.trim().removeSurrounding("\"").removeSurrounding("'").trim()
 
+    val rawGeminiApiKey = localProperties.getProperty("GEMINI_API_KEY")
+        ?: System.getenv("GEMINI_API_KEY")
+        ?: ""
+    val geminiApiKey = rawGeminiApiKey.trim().removeSurrounding("\"").removeSurrounding("'").trim()
+
     defaultConfig {
         applicationId = "com.devpulse.ai"
         minSdk = 26
@@ -32,6 +37,7 @@ android {
         }
 
         buildConfigField("String", "GITHUB_TOKEN", "\"$githubToken\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     tasks.matching { it.name.startsWith("generate") && it.name.endsWith("BuildConfig") }.configureEach {
